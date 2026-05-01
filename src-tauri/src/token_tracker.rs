@@ -1,6 +1,6 @@
-//! Token 用量统计和费用计算
+//! Token usage statistics and cost calculation
 //!
-//! 从代理转发的 SSE 流中提取 usage 数据，按模型价格计算费用。
+//! Extract usage data from proxy-forwarded SSE streams, calculate costs based on model pricing.
 
 use chrono::{DateTime, Datelike, Utc};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-/// 模型定价表（美元 / 百万 token）
+/// Model pricing table (USD / million tokens)
 struct ModelPricing {
     input_per_million: f64,
     cached_input_per_million: f64,
@@ -49,7 +49,7 @@ fn get_pricing(model: &str) -> ModelPricing {
             output_per_million: 1.60,
         }
     } else {
-        // 默认按中等价格
+        // Default to medium pricing
         ModelPricing {
             input_per_million: 2.00,
             cached_input_per_million: 0.50,
@@ -58,7 +58,7 @@ fn get_pricing(model: &str) -> ModelPricing {
     }
 }
 
-/// 时间点记录（用于趋势图）
+/// Timestamp record (for trend chart)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenHistoryEntry {
     pub timestamp: DateTime<Utc>,
@@ -68,7 +68,7 @@ pub struct TokenHistoryEntry {
     pub cost: f64,
 }
 
-/// 单次请求的 usage 数据
+/// Single request usage data
 #[derive(Debug, Clone)]
 pub struct RequestUsage {
     pub input_tokens: i64,
@@ -78,7 +78,7 @@ pub struct RequestUsage {
     pub model: String,
 }
 
-/// 累计统计数据
+/// Cumulative statistics data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageStats {
     pub total_input_tokens: i64,
@@ -87,11 +87,11 @@ pub struct UsageStats {
     pub total_tokens: i64,
     pub total_cost_usd: f64,
     pub total_requests: u64,
-    /// 按模型分拆的 token 数
+    /// Token count by model
     pub by_model: HashMap<String, ModelUsage>,
-    /// 统计开始时间
+    /// Statistics start time
     pub since: DateTime<Utc>,
-    /// 上月同期对比数据
+    /// Last month comparison data
     pub last_month_cost: Option<f64>,
     pub last_month_tokens: Option<i64>,
 }
@@ -120,7 +120,7 @@ impl Default for UsageStats {
     }
 }
 
-/// Token 统计追踪器
+/// Token statistics tracker
 pub struct TokenTracker {
     stats: Mutex<UsageStats>,
 }
@@ -128,7 +128,7 @@ pub struct TokenTracker {
 impl TokenTracker {
     pub fn new() -> Arc<Self> {
         let mut stats = Self::load_from_disk().unwrap_or_default();
-        // 每月重置
+        // Monthly reset
         let now = Utc::now();
         if stats.since.month() != now.month() || stats.since.year() != now.year() {
             let old = stats.clone();
@@ -141,7 +141,7 @@ impl TokenTracker {
         })
     }
 
-    /// 记录一次请求的 usage
+    /// Record usage for a single request
     pub fn record(&self, usage: RequestUsage) {
         let pricing = get_pricing(&usage.model);
 
@@ -171,11 +171,11 @@ impl TokenTracker {
             model_entry.output_tokens += usage.output_tokens;
             model_entry.cost_usd += cost;
 
-            // 持久化累计值
+            // Persist cumulative values
             Self::save_to_disk(&stats);
         }
 
-        // 追加时间点记录（用于趋势图）
+        // Append timestamp record (for trend chart)
         let entry = TokenHistoryEntry {
             timestamp: Utc::now(),
             model: usage.model,
@@ -186,12 +186,12 @@ impl TokenTracker {
         Self::append_history(&entry);
     }
 
-    /// 获取当前统计快照
+    /// Get current statistics snapshot
     pub fn get_stats(&self) -> UsageStats {
         self.stats.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
-    /// 获取最近 N 天的时间点记录
+    /// Get timestamp records for last N days
     pub fn get_history(days: u32) -> Vec<TokenHistoryEntry> {
         let path = Self::history_path();
         let content = match std::fs::read_to_string(&path) {
@@ -207,7 +207,7 @@ impl TokenTracker {
             .collect()
     }
 
-    /// 重置统计
+    /// Reset statistics
     pub fn reset(&self) {
         if let Ok(mut stats) = self.stats.lock() {
             let old = stats.clone();
@@ -260,13 +260,13 @@ impl TokenTracker {
     }
 }
 
-/// 从 SSE 流的累积数据中提取 usage 信息
-/// 查找 `response.completed` 事件中的 `usage` 字段
+/// Extract usage info from accumulated SSE stream data
+/// Look for `usage` field in `response.completed` events
 pub fn extract_usage_from_sse(data: &[u8], request_model: &str) -> Option<RequestUsage> {
     let text = String::from_utf8_lossy(data);
 
-    // SSE 格式：每个事件以 "data: " 开头
-    // 查找包含 "response.completed" 的事件
+    // SSE format: each event starts with "data: "
+    // Look for events containing "response.completed"
     for line in text.lines() {
         let line = line.trim();
         if !line.starts_with("data:") {
@@ -277,7 +277,7 @@ pub fn extract_usage_from_sse(data: &[u8], request_model: &str) -> Option<Reques
             continue;
         }
 
-        // 解析 JSON
+        // Parse JSON
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
             let response = val.get("response")?;
             let usage = response.get("usage")?;

@@ -52,7 +52,7 @@ export function Settings() {
             const data = await invoke<AppSettings>('get_settings');
             setSettings(data);
         } catch (e) {
-            console.error('加载设置失败:', e);
+            console.error('Failed to load settings:', e);
         }
     };
 
@@ -61,10 +61,10 @@ export function Settings() {
         setMessage(null);
         try {
             await invoke('update_settings', { settings });
-            setMessage({ type: 'success', text: '✅ 设置已保存' });
+            setMessage({ type: 'success', text: '✅ Settings saved' });
             setTimeout(() => setMessage(null), 3000);
         } catch (e) {
-            setMessage({ type: 'error', text: `❌ 保存失败: ${e}` });
+            setMessage({ type: 'error', text: `❌ Save failed: ${e}` });
         } finally {
             setSaving(false);
         }
@@ -75,7 +75,7 @@ export function Settings() {
     };
 
     const handleRepair = async () => {
-        if (!confirm('这将尝试移除 Codex App 的安全隔离属性。\n\n系统可能会弹窗要求输入密码以获得权限。是否继续？')) {
+        if (!confirm('This will attempt to remove Codex App quarantine attributes.\n\nSystem may prompt for password to gain permissions. Continue?')) {
             return;
         }
 
@@ -84,9 +84,9 @@ export function Settings() {
         try {
             const ticket = await invoke<string>('request_quarantine_fix_ticket');
             await invoke('fix_codex_quarantine', { ticket });
-            alert('✅ 修复成功！\n\n现在请尝试重新打开 Codex App。');
+            alert('✅ Fix successful!\n\nPlease try reopening Codex App now.');
         } catch (e) {
-            alert(`❌ 修复失败: ${e}`);
+            alert(`❌ Fix failed: ${e}`);
         } finally {
             setRepairing(false);
         }
@@ -96,14 +96,14 @@ export function Settings() {
     return (
         <div className="settings-page">
             <div className="settings-header">
-                <h2>设置</h2>
+                <h2>Settings</h2>
                 <button
                     className="save-button"
                     onClick={saveSettings}
                     disabled={saving}
                 >
                     <Save size={14} />
-                    {saving ? '保存中...' : '保存设置'}
+                    {saving ? 'Saving...' : 'Save Settings'}
                 </button>
             </div>
 
@@ -114,31 +114,31 @@ export function Settings() {
             )}
 
             <div className="settings-section">
-                <h3><Palette size={16} /> 界面外观</h3>
+                <h3><Palette size={16} /> Appearance</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">界面配色</span>
-                        <span className="setting-desc">主界面颜色的色调风格</span>
+                        <span className="setting-label">Theme</span>
+                        <span className="setting-desc">Main interface color tone style</span>
                     </div>
                     <select
                         className="select-input"
                         value={settings.theme_palette}
                         onChange={e => updateField('theme_palette', e.target.value)}
                     >
-                        <option value="midnight">暗黑护眼</option>
-                        <option value="github">经典蓝</option>
-                        <option value="agate">玛瑙绿</option>
+                        <option value="midnight">Midnight Dark</option>
+                        <option value="github">Classic Blue</option>
+                        <option value="agate">Agate Green</option>
                     </select>
                 </div>
             </div>
 
             <div className="settings-section">
-                <h3><Server size={16} /> 后台服务</h3>
+                <h3><Server size={16} /> Background Service</h3>
 
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">后台保活与同步</span>
-                        <span className="setting-desc">当前账号只做权威回流；非活跃账号按独占策略保活刷新（保存后生效）</span>
+                        <span className="setting-label">Background Keepalive & Sync</span>
+                        <span className="setting-desc">Current account only authoritative sync; inactive accounts keepalive refresh by exclusive strategy (effective after save)</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -148,15 +148,15 @@ export function Settings() {
                         />
                         <span className="toggle-slider"></span>
                         <span className={`toggle-text ${settings.background_refresh ? 'on' : ''}`}>
-                            {settings.background_refresh ? '已开启' : '已关闭'}
+                            {settings.background_refresh ? 'Enabled' : 'Disabled'}
                         </span>
                     </label>
                 </div>
 
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">智能切号允许 FREE 账号</span>
-                        <span className="setting-desc">点击“切换下一个账号”时，是否允许自动寻找并切到 FREE 账号（默认优先付费账号）</span>
+                        <span className="setting-label">Smart Switch Allow FREE Account</span>
+                        <span className="setting-desc">When clicking "Switch Next Account", whether to allow auto finding and switching to FREE account (default prioritizes paid accounts)</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -173,7 +173,7 @@ export function Settings() {
                         <>
                             <div className="setting-item sub-item">
                                 <div className="setting-info">
-                                    <span className="setting-label">调度间隔（分钟）</span>
+                                    <span className="setting-label">Schedule Interval (minutes)</span>
                                 </div>
                                 <input
                                     type="number"
@@ -186,8 +186,8 @@ export function Settings() {
                             </div>
                             <div className="setting-item sub-item">
                                 <div className="setting-info">
-                                    <span className="setting-label">非活跃保活阈值（天）</span>
-                                    <span className="setting-desc">当账号 last_refresh 超过该阈值时，调度器才会尝试保活刷新</span>
+                                    <span className="setting-label">Inactive Keepalive Threshold (days)</span>
+                                    <span className="setting-desc">Scheduler only attempts keepalive refresh when account last_refresh exceeds this threshold</span>
                                 </div>
                                 <input
                                     type="number"
@@ -204,12 +204,12 @@ export function Settings() {
             </div >
 
             <div className="settings-section">
-                <h3><Monitor size={16} /> IDE 重载</h3>
+                <h3><Monitor size={16} /> IDE Reload</h3>
 
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">自动重载 IDE</span>
-                        <span className="setting-desc">切换账号后自动重载 IDE 以应用新的 Token</span>
+                        <span className="setting-label">Auto Reload IDE</span>
+                        <span className="setting-desc">Auto reload IDE after switching account to apply new token</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -225,8 +225,8 @@ export function Settings() {
                     <>
                         <div className="setting-item sub-item">
                             <div className="setting-info">
-                                <span className="setting-label">主力 IDE</span>
-                                <span className="setting-desc">仅重载选中的 IDE</span>
+                                <span className="setting-label">Primary IDE</span>
+                                <span className="setting-desc">Only reload selected IDE</span>
                             </div>
                             <select
                                 className="select-input"
@@ -241,8 +241,8 @@ export function Settings() {
 
                         <div className="setting-item sub-item">
                             <div className="setting-info">
-                                <span className="setting-label">使用杀进程重启</span>
-                                <span className="setting-desc">使用 pkill 方式重启（Windsurf 推荐，无需权限）</span>
+                                <span className="setting-label">Use Kill Process Restart</span>
+                                <span className="setting-desc">Use pkill restart (recommended for Windsurf, no permissions needed)</span>
                             </div>
                             <label className="toggle">
                                 <input
@@ -258,28 +258,28 @@ export function Settings() {
             </div>
 
             <div className="settings-section danger">
-                <h3><Wrench size={16} /> 故障修复</h3>
+                <h3><Wrench size={16} /> Troubleshooting</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">修复 Codex App 闪退</span>
-                        <span className="setting-desc">移除 macOS 安全隔离属性 (需要管理员权限)</span>
+                        <span className="setting-label">Fix Codex App Crash</span>
+                        <span className="setting-desc">Remove macOS quarantine attribute (requires admin privileges)</span>
                     </div>
                     <button
                         className="action-button warning"
                         onClick={handleRepair}
                         disabled={repairing}
                     >
-                        {repairing ? '修复中...' : '立即修复'}
+                        {repairing ? 'Fixing...' : 'Fix Now'}
                     </button>
                 </div>
             </div>
 
             <div className="settings-section">
-                <h3><Github size={16} /> 关于</h3>
+                <h3><Github size={16} /> About</h3>
                 <div className="setting-item">
                     <div className="setting-info">
                         <span className="setting-label">Codex Switcher</span>
-                        <span className="setting-desc">多账号智能切换 + 本地代理 + 用量统计</span>
+                        <span className="setting-desc">Multi-account smart switching + local proxy + usage stats</span>
                     </div>
                     <a
                         className="action-button github-link"

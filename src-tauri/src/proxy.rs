@@ -1,10 +1,10 @@
-//! Codex Switcher - 本地 HTTP/WebSocket 代理服务器
+//! Codex Switcher - Local HTTP/WebSocket proxy server
 //!
-//! 透明代理：拦截 Codex CLI/App 请求，动态注入当前账号 Token 并转发。
-//! HTTP: Header 转发逻辑与官方 responses-api-proxy 一致
-//! WebSocket: 双向桥接，支持 Codex App 的 WebSocket 通信
+//! Transparent proxy: Intercepts Codex CLI/App requests, dynamically injects current account Token and forwards.
+//! HTTP: Header forwarding logic consistent with official responses-api-proxy
+//! WebSocket: Bidirectional bridge, supports Codex App WebSocket communication
 //!
-//! 功能：SSE 流式转发 | WebSocket 透传 | 429 自动切号 | 封号检测 | 评分选号
+//! Features: SSE streaming | WebSocket passthrough | 429 auto-switch | Ban detection | Scoring selection
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
@@ -32,23 +32,23 @@ use crate::account::AccountStore;
 use crate::switch_log::{SwitchLogger, SwitchReason};
 use crate::token_tracker::TokenTracker;
 
-/// 待注入的切号通知消息
+/// Pending switch notification message to inject
 static PENDING_INJECT_MSG: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 
-/// ChatGPT OAuth 登录用的上游（免费/Plus/Team 账号）
+/// Upstream for ChatGPT OAuth login (free/Plus/Team accounts)
 const CHATGPT_HOST: &str = "chatgpt.com";
 const CHATGPT_ORIGIN: &str = "https://chatgpt.com/backend-api/codex";
 
-/// API key 用的上游
+/// Upstream for API key
 const API_HOST: &str = "api.openai.com";
 const API_ORIGIN: &str = "https://api.openai.com";
 const MAX_429_RETRIES: usize = 5;
 
-/// 统一的响应 Body 类型：支持 Full（错误/小响应）和 Stream（SSE 流式）
+/// Unified response Body type: supports Full (errors/small responses) and Stream (SSE streaming)
 type ProxyBody = BoxBody<Bytes, String>;
 
-/// 代理运行指标（与 AppState 共享）
+/// Proxy runtime metrics (shared with AppState)
 pub struct ProxyStats {
     pub total_requests: AtomicU64,
     pub auto_switches: AtomicU64,
@@ -63,7 +63,7 @@ impl Default for ProxyStats {
     }
 }
 
-/// 代理运行时共享状态
+/// Proxy runtime shared state
 struct ProxyState {
     store: Arc<Mutex<AccountStore>>,
     client: Client,
@@ -71,12 +71,12 @@ struct ProxyState {
     switching: AtomicBool,
     stats: Arc<ProxyStats>,
     tracker: Arc<TokenTracker>,
-    /// 切号时通知 WebSocket 断开
+    /// Notify WebSocket disconnect on switch
     ws_disconnect: Arc<tokio::sync::Notify>,
     switch_logger: Arc<SwitchLogger>,
 }
 
-/// 启动代理服务器
+/// Start proxy server
 pub fn start(
     store: Arc<Mutex<AccountStore>>,
     port: u16,
@@ -96,16 +96,16 @@ pub fn start(
         let listener = match TcpListener::bind(addr).await {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("[Proxy] 绑定端口 {} 失败: {}", port, e);
+                eprintln!("[Proxy] Failed to bind port {}: {}", port, e);
                 return;
             }
         };
 
-        println!("[Proxy] 代理服务器已启动，监听 {}:{}", addr.ip(), port);
+        println!("[Proxy] Proxy server started, listening on {}:{}", addr.ip(), port);
 
         let client = Client::builder()
             .build()
-            .expect("[Proxy] 构建 reqwest Client 失败");
+            .expect("[Proxy] Failed to build reqwest Client");
 
         let state = Arc::new(ProxyState {
             store,
@@ -122,7 +122,7 @@ pub fn start(
             let (stream, peer_addr) = match listener.accept().await {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[Proxy] accept 失败: {}", e);
+                    eprintln!("[Proxy] accept failed: {}", e);
                     continue;
                 }
             };
@@ -142,7 +142,7 @@ pub fn start(
                     .await
                 {
                     if !e.is_incomplete_message() {
-                        eprintln!("[Proxy] 连接 {} 错误: {}", peer_addr, e);
+                        eprintln!("[Proxy] Connection {} error: {}", peer_addr, e);
                     }
                 }
             });
@@ -151,55 +151,55 @@ pub fn start(
 }
 
 // ────────────────────────────────────────────────────────────────
-// Token 管理
+// Token management
 // ────────────────────────────────────────────────────────────────
 
-/// 获取当前账号最新的 access_token + 认证模式
+/// Get current account's latest access_token + auth mode
 ///
-/// 安全策略：不主动刷新 token（避免与 Codex CLI 冲突），
-/// 但每次请求从 auth.json 回读，确保用到 Codex CLI 刷新后的最新值。
+/// Safety policy: Don't proactively refresh token (avoid conflict with Codex CLI),
+/// but re-read from auth.json on each request to ensure using latest value refreshed by Codex CLI.
 ///
-/// 返回 (token, is_chatgpt_auth)
+/// Returns (token, is_chatgpt_auth)
 fn get_current_token(state: &ProxyState) -> Result<(String, bool), String> {
     let mut store = state.store.lock().map_err(|e| e.to_string())?;
-    let current_id = store.current.as_ref().ok_or("没有激活的账号")?.clone();
+    let current_id = store.current.as_ref().ok_or("No active account")?.clone();
 
-    // 从 auth.json 回读最新 token（Codex CLI 可能已刷新）
+    // Re-read latest token from auth.json (Codex CLI may have refreshed)
     if let Ok(disk_auth) = AccountStore::read_codex_auth() {
         if store.sync_account_from_auth_json(&current_id, disk_auth) {
             let _ = store.save();
         }
     }
 
-    let account = store.accounts.get(&current_id).ok_or("当前账号不存在")?;
+    let account = store.accounts.get(&current_id).ok_or("Current account does not exist")?;
 
     let token = AccountStore::extract_access_token(&account.auth_json)
-        .ok_or_else(|| "当前账号缺少 access_token".to_string())?;
+        .ok_or_else(|| "Current account missing access_token".to_string())?;
 
-    // 判断认证模式：JWT (eyJ...) = ChatGPT OAuth, sk-... = API key
+    // Determine auth mode: JWT (eyJ...) = ChatGPT OAuth, sk-... = API key
     let is_chatgpt = token.starts_with("eyJ");
 
     Ok((token, is_chatgpt))
 }
 
-/// 根据认证模式获取上游地址
+/// Get upstream address based on auth mode
 fn get_upstream(is_chatgpt: bool, path_and_query: &str) -> (String, &'static str) {
     if is_chatgpt {
-        // 客户端路径: /v1/responses (因为 OPENAI_BASE_URL 带 /v1)
-        // ChatGPT 上游: /backend-api/codex/responses (不含 /v1)
-        // 需要去掉 /v1 前缀
+        // Client path: /v1/responses (because OPENAI_BASE_URL includes /v1)
+        // ChatGPT upstream: /backend-api/codex/responses (without /v1)
+        // Need to strip /v1 prefix
         let path = path_and_query.strip_prefix("/v1").unwrap_or(path_and_query);
         let url = format!("{}{}", CHATGPT_ORIGIN, path);
         (url, CHATGPT_HOST)
     } else {
-        // API key: 转发到 api.openai.com + 原始路径（保留 /v1）
+        // API key: forward to api.openai.com + original path (keep /v1)
         let url = format!("{}{}", API_ORIGIN, path_and_query);
         (url, API_HOST)
     }
 }
 
 // ────────────────────────────────────────────────────────────────
-// 选号算法（复用 lib.rs 共享评分）
+// Account selection algorithm (reuse lib.rs shared scoring)
 // ────────────────────────────────────────────────────────────────
 
 enum PickResult {
@@ -255,7 +255,7 @@ fn pick_next_account(state: &ProxyState) -> PickResult {
 }
 
 // ────────────────────────────────────────────────────────────────
-// 预防性切号 / 封号检测 / 切号执行
+// Preemptive switch / Ban detection / Switch execution
 // ────────────────────────────────────────────────────────────────
 
 fn should_preemptive_switch(state: &ProxyState) -> bool {
@@ -285,7 +285,7 @@ fn should_preemptive_switch(state: &ProxyState) -> bool {
     };
 
     if account.is_banned || account.is_token_invalid || account.is_logged_out {
-        println!("[Proxy] 发现当前账号被封禁/失效/登出，触发预防性切号");
+        println!("[Proxy] Current account banned/invalid/logged out, triggering preemptive switch");
         return true;
     }
 
@@ -299,20 +299,20 @@ fn should_preemptive_switch(state: &ProxyState) -> bool {
 
     if is_free && fg > 0.0 && quota.five_hour_left < fg {
         println!(
-            "[Proxy] Free 保护线触发: {:.0}% < {:.0}%",
+            "[Proxy] Free protection triggered: {:.0}% < {:.0}%",
             quota.five_hour_left, fg
         );
         return true;
     }
     if t5h > 0.0 && quota.five_hour_left < t5h {
         println!(
-            "[Proxy] 5h 阈值触发: {:.0}% < {:.0}%",
+            "[Proxy] 5h threshold triggered: {:.0}% < {:.0}%",
             quota.five_hour_left, t5h
         );
         return true;
     }
     if tw > 0.0 && quota.weekly_left < tw {
-        println!("[Proxy] 周阈值触发: {:.0}% < {:.0}%", quota.weekly_left, tw);
+        println!("[Proxy] Weekly threshold triggered: {:.0}% < {:.0}%", quota.weekly_left, tw);
         return true;
     }
     false
@@ -325,16 +325,16 @@ fn mark_current_banned(state: &ProxyState) {
                 account.is_banned = true;
                 let name = account.name.clone();
                 let _ = store.save();
-                println!("[Proxy] 账号 {} 已标记为封号", name);
+                println!("[Proxy] Account {} marked as banned", name);
                 let _ = state.app_handle.emit("proxy-account-banned", &name);
-                // macOS 系统通知（可配置）
+                // macOS system notification (configurable)
                 if store.settings.notify_on_switch {
                     let notify_name = name.clone();
                     std::thread::spawn(move || {
                         let _ = std::process::Command::new("osascript")
                             .arg("-e")
                             .arg(format!(
-                                "display notification \"{}\" with title \"Codex Switcher\" subtitle \"检测到封号\"",
+                                "display notification \"{}\" with title \"Codex Switcher\" subtitle \"Ban detected\"",
                                 notify_name
                             ))
                             .output();
@@ -345,8 +345,8 @@ fn mark_current_banned(state: &ProxyState) {
     }
 }
 
-/// 429 后标记当前账号的 5h 额度为耗尽
-/// 标记指定账号的 5h 额度为耗尽
+/// Mark current account's 5h quota as depleted after 429
+/// Mark specified account's 5h quota as depleted
 fn mark_account_quota_depleted(state: &ProxyState, account_id: &str) {
     if let Ok(mut store) = state.store.lock() {
         if let Some(account) = store.accounts.get_mut(account_id) {
@@ -374,7 +374,7 @@ fn mark_current_quota_depleted(state: &ProxyState) {
 fn do_switch(state: &ProxyState, new_id: &str, reason: SwitchReason) -> Result<(), String> {
     let mut store = state.store.lock().map_err(|e| e.to_string())?;
 
-    // 记录切号前的账号信息
+    // Record account info before switch
     let from_name = store
         .current
         .as_ref()
@@ -401,9 +401,9 @@ fn do_switch(state: &ProxyState, new_id: &str, reason: SwitchReason) -> Result<(
         .and_then(|a| a.cached_quota.as_ref())
         .map(|q| q.five_hour_left);
 
-    println!("[Proxy] 自动切号 → {} ({})", to_name, reason);
+    println!("[Proxy] Auto switch → {} ({})", to_name, reason);
 
-    // 记录切号日志
+    // Log account switch
     state.switch_logger.log_switch(
         from_name.clone(),
         to_name.clone(),
@@ -417,31 +417,31 @@ fn do_switch(state: &ProxyState, new_id: &str, reason: SwitchReason) -> Result<(
     let _ = state.app_handle.emit("proxy-account-switched", &to_name);
     let _ = state.app_handle.emit("accounts-updated", ());
 
-    // 读取通知设置
+    // Read notification settings
     let notify_enabled = store.settings.notify_on_switch;
     let inject_enabled = store.settings.inject_switch_message;
 
-    drop(store); // 释放锁
+    drop(store); // Release lock
 
-    // macOS 系统通知（可配置）
+    // macOS system notification (configurable)
     if notify_enabled {
-        let from = from_name.unwrap_or_else(|| "无".to_string());
+        let from = from_name.unwrap_or_else(|| "None".to_string());
         let notify_msg = format!("{} → {}", from, to_name);
         std::thread::spawn(move || {
             let _ = std::process::Command::new("osascript")
                 .arg("-e")
                 .arg(format!(
-                    "display notification \"{}\" with title \"Codex Switcher\" subtitle \"自动切号\"",
+                    "display notification \"{}\" with title \"Codex Switcher\" subtitle \"Auto switch\"",
                     notify_msg
                 ))
                 .output();
         });
     }
 
-    // 注入 WebSocket 消息标记（可配置，实验性）
+    // Inject WebSocket message marker (configurable, experimental)
     if inject_enabled {
         PENDING_INJECT_MSG.lock().ok().map(|mut msg| {
-            *msg = Some(format!("⚡ [Codex Switcher] 已切换到 {}", to_name));
+            *msg = Some(format!("⚡ [Codex Switcher] Switched to {}", to_name));
         });
     }
 
@@ -449,7 +449,7 @@ fn do_switch(state: &ProxyState, new_id: &str, reason: SwitchReason) -> Result<(
 }
 
 // ────────────────────────────────────────────────────────────────
-// 核心请求处理
+// Core request handling
 // ────────────────────────────────────────────────────────────────
 
 async fn handle_request(
@@ -458,7 +458,7 @@ async fn handle_request(
 ) -> Result<Response<ProxyBody>, Infallible> {
     state.stats.total_requests.fetch_add(1, Ordering::Relaxed);
 
-    // ── 健康检查 ──
+    // ── Health check ──
     if req.method() == Method::GET && req.uri().path() == "/health" {
         let total = state.stats.total_requests.load(Ordering::Relaxed);
         let switches = state.stats.auto_switches.load(Ordering::Relaxed);
@@ -474,19 +474,19 @@ async fn handle_request(
             .unwrap());
     }
 
-    // ── WebSocket 升级检测 ──
+    // ── WebSocket upgrade detection ──
     if is_websocket_upgrade(&req) {
-        println!("[Proxy] WebSocket upgrade 请求: {}", req.uri());
+        println!("[Proxy] WebSocket upgrade request: {}", req.uri());
         return handle_websocket(state, req).await;
     }
 
-    // 1. 获取当前 token + 认证模式
+    // 1. Get current token + auth mode
     let (token, is_chatgpt) = match get_current_token(&state) {
         Ok(t) => t,
         Err(e) => return Ok(error_response(StatusCode::SERVICE_UNAVAILABLE, &e)),
     };
 
-    // 2. 提取请求元数据 + 根据认证模式路由上游
+    // 2. Extract request metadata + route upstream based on auth mode
     let method = req.method().clone();
     let path_and_query = req
         .uri()
@@ -495,7 +495,7 @@ async fn handle_request(
         .unwrap_or_else(|| "/".to_string());
     let (upstream_url, upstream_host) = get_upstream(is_chatgpt, &path_and_query);
 
-    // 3. 透明 Header 转发（官方 responses-api-proxy 逻辑）
+    // 3. Transparent Header forwarding (official responses-api-proxy logic)
     let mut base_headers = reqwest::header::HeaderMap::new();
     for (name, value) in req.headers() {
         let lower = name.as_str().to_ascii_lowercase();
@@ -512,16 +512,16 @@ async fn handle_request(
         base_headers.insert(reqwest::header::HOST, host_val);
     }
 
-    // 4. 读取请求体
+    // 4. Read request body
     let body_bytes = match req.into_body().collect().await {
         Ok(collected) => collected.to_bytes(),
         Err(e) => {
-            eprintln!("[Proxy] 读取请求体失败: {}", e);
-            return Ok(error_response(StatusCode::BAD_REQUEST, "读取请求体失败"));
+            eprintln!("[Proxy] Failed to read request body: {}", e);
+            return Ok(error_response(StatusCode::BAD_REQUEST, "Failed to read request body"));
         }
     };
 
-    // 5. 首次转发
+    // 5. First forward
     let upstream_resp = match forward_with_token(
         &state,
         &method,
@@ -536,14 +536,14 @@ async fn handle_request(
         Err(e) => {
             return Ok(error_response(
                 StatusCode::BAD_GATEWAY,
-                &format!("上游连接失败: {}", e),
+                &format!("Upstream connection failed: {}", e),
             ))
         }
     };
 
     let status_code = upstream_resp.status();
 
-    // 6. 封号检测（401/403）
+    // 6. Ban detection (401/403)
     if status_code == reqwest::StatusCode::UNAUTHORIZED
         || status_code == reqwest::StatusCode::FORBIDDEN
     {
@@ -555,7 +555,7 @@ async fn handle_request(
             || body_lower.contains("account_deactivated");
 
         if banned {
-            println!("[Proxy] 封号检测触发，标记并切号...");
+            println!("[Proxy] Ban detection triggered, marking and switching...");
             mark_current_banned(&state);
 
             if let Some(resp) =
@@ -565,8 +565,8 @@ async fn handle_request(
                 return Ok(resp);
             }
         } else {
-            // 401 且未封号，可能是正常过期或被登出。
-            println!("[Proxy] 拦截到 401，尝试静默刷新 Token...");
+            // 401 but not banned, possibly normal expiration or logout.
+            println!("[Proxy] Intercepted 401, attempting silent Token refresh...");
             let rt_opt = {
                 let store = state.store.lock().unwrap();
                 store
@@ -579,7 +579,7 @@ async fn handle_request(
             if let Some(rt) = rt_opt {
                 match crate::oauth::refresh_access_token(&rt).await {
                     Ok(new_tokens) => {
-                        println!("[Proxy] 静默刷新 Token 成功，重试请求");
+                        println!("[Proxy] Silent Token refresh successful, retrying request");
                         if let Ok(mut store) = state.store.lock() {
                             if let Some(current_id) = store.current.clone() {
                                 if let Some(acc) = store.accounts.get_mut(&current_id) {
@@ -616,7 +616,7 @@ async fn handle_request(
                             || lower.contains("invalid_grant")
                             || lower.contains("signed in to another account")
                         {
-                            println!("[Proxy] 静默刷新失败 (疑似全网登出/登录冲突)，标记为登出并切号: {}", e);
+                            println!("[Proxy] Silent refresh failed (possible global logout/login conflict), marking as logged out and switching: {}", e);
                             if let Ok(mut store) = state.store.lock() {
                                 if let Some(current_id) = store.current.clone() {
                                     if let Some(acc) = store.accounts.get_mut(&current_id) {
@@ -637,7 +637,7 @@ async fn handle_request(
                                 return Ok(resp);
                             }
                         } else {
-                            println!("[Proxy] 静默刷新失败 (其他原因): {}", e);
+                            println!("[Proxy] Silent refresh failed (other reason): {}", e);
                         }
                     }
                 }
@@ -648,15 +648,15 @@ async fn handle_request(
             .status(status_code.as_u16())
             .header("content-type", "application/json")
             .body(full_body(resp_bytes))
-            .unwrap_or_else(|_| error_response(StatusCode::BAD_GATEWAY, "响应构建失败")));
+            .unwrap_or_else(|_| error_response(StatusCode::BAD_GATEWAY, "Response build failed")));
     }
 
-    // 7. 429 自动切号
+    // 7. 429 auto switch
     if status_code == reqwest::StatusCode::TOO_MANY_REQUESTS {
-        println!("[Proxy] 收到 429，标记额度耗尽并切号...");
+        println!("[Proxy] Received 429, marking quota depleted and switching...");
         mark_current_quota_depleted(&state);
 
-        // 并发保护
+        // Concurrency protection
         if state
             .switching
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -671,7 +671,7 @@ async fn handle_request(
                 return Ok(resp);
             }
         } else {
-            // 其他请求正在切号，短暂等待后用新 token 重试
+            // Other request is switching, wait briefly then retry with new token
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             if let Ok((new_token, _)) = get_current_token(&state) {
                 if let Ok(retry_resp) = forward_with_token(
@@ -692,7 +692,7 @@ async fn handle_request(
             }
         }
 
-        // 切号失败/账号耗尽 → 缓冲原始 429 返回
+        // Switch failed/accounts exhausted → buffer original 429 response
         let resp_bytes = upstream_resp.bytes().await.unwrap_or_default();
         return Ok(Response::builder()
             .status(429)
@@ -701,10 +701,10 @@ async fn handle_request(
             .unwrap_or_else(|_| error_response(StatusCode::TOO_MANY_REQUESTS, "429")));
     }
 
-    // 8. 成功响应 → SSE 流式转发
+    // 8. Success response → SSE streaming forward
     let resp = build_stream_response(upstream_resp, Some(state.tracker.clone()));
 
-    // 后台检查预防性切号
+    // Background preemptive switch check
     let state_clone = state.clone();
     tokio::spawn(async move {
         if should_preemptive_switch(&state_clone) {
@@ -724,7 +724,7 @@ async fn handle_request(
     Ok(resp)
 }
 
-/// 切号并重试（最多 MAX_429_RETRIES 次）
+/// Switch and retry (max MAX_429_RETRIES times)
 async fn try_switch_and_retry(
     state: &ProxyState,
     method: &hyper::Method,
@@ -736,7 +736,7 @@ async fn try_switch_and_retry(
         match pick_next_account(state) {
             PickResult::Found { id, token } => {
                 if let Err(e) = do_switch(state, &id, SwitchReason::Http429) {
-                    eprintln!("[Proxy] 切号失败: {}", e);
+                    eprintln!("[Proxy] Switch failed: {}", e);
                     continue;
                 }
 
@@ -745,19 +745,19 @@ async fn try_switch_and_retry(
                 {
                     Ok(resp) if resp.status() != reqwest::StatusCode::TOO_MANY_REQUESTS => {
                         println!(
-                            "[Proxy] 第 {} 次切号重试成功 ({})",
+                            "[Proxy] Switch retry {} successful ({})",
                             attempt + 1,
                             resp.status()
                         );
                         return Some(build_stream_response(resp, Some(state.tracker.clone())));
                     }
                     Ok(_) => {
-                        println!("[Proxy] 第 {} 次切号后仍 429", attempt + 1);
+                        println!("[Proxy] Still 429 after switch retry {}", attempt + 1);
                         mark_current_quota_depleted(state);
                         continue;
                     }
                     Err(e) => {
-                        eprintln!("[Proxy] 切号后转发失败: {}", e);
+                        eprintln!("[Proxy] Forward failed after switch: {}", e);
                         continue;
                     }
                 }
@@ -766,10 +766,10 @@ async fn try_switch_and_retry(
                 let msg = if let Some(ts) = earliest_reset {
                     let dt = chrono::DateTime::from_timestamp(ts, 0)
                         .map(|d| d.with_timezone(&chrono::Local).format("%H:%M").to_string())
-                        .unwrap_or_else(|| "未知".to_string());
-                    format!("所有账号额度已耗尽，最早恢复：{}", dt)
+                        .unwrap_or_else(|| "Unknown".to_string());
+                    format!("All account quotas exhausted, earliest recovery: {}", dt)
                 } else {
-                    "所有账号额度已耗尽".to_string()
+                    "All account quotas exhausted".to_string()
                 };
                 eprintln!("[Proxy] {}", msg);
                 let _ = state.app_handle.emit("proxy-all-exhausted", &msg);
@@ -781,7 +781,7 @@ async fn try_switch_and_retry(
 }
 
 // ────────────────────────────────────────────────────────────────
-// HTTP 转发与响应构建
+// HTTP forwarding and response building
 // ────────────────────────────────────────────────────────────────
 
 async fn forward_with_token(
@@ -808,10 +808,10 @@ async fn forward_with_token(
         .body(body.to_vec())
         .send()
         .await
-        .map_err(|e| format!("转发请求失败: {}", e))
+        .map_err(|e| format!("Forward request failed: {}", e))
 }
 
-/// SSE 流式响应构建：复制 header + 流式传输 body + 后台提取 usage
+/// SSE streaming response building: copy header + stream body + background usage extraction
 fn build_stream_response(
     upstream_resp: reqwest::Response,
     tracker: Option<Arc<TokenTracker>>,
@@ -819,7 +819,7 @@ fn build_stream_response(
     let status = upstream_resp.status();
     let mut builder = Response::builder().status(status.as_u16());
 
-    // 尝试从请求中获取 model 信息（响应 header 中可能没有）
+    // Try to get model info from request (may not be in response header)
     let model_hint = String::new();
 
     for (name, value) in upstream_resp.headers() {
@@ -836,17 +836,17 @@ fn build_stream_response(
         }
     }
 
-    // 流式传输 + usage 提取
-    // 每个 chunk 直接转发，同时复制到 buffer
-    // 流结束时（收到 None）解析 buffer 提取 usage
+    // Streaming + usage extraction
+    // Each chunk forwarded directly, also copied to buffer
+    // When stream ends (received None) parse buffer to extract usage
     let usage_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
     let buf_clone = usage_buf.clone();
     let tracker_clone = tracker.clone();
 
     let raw_stream = upstream_resp.bytes_stream();
 
-    // 用 chain 在原始 stream 结束后追加一个"结束信号"
-    // 利用 map + 闭包在最后一个 chunk 后触发 usage 解析
+    // Use chain to append an "end signal" after original stream ends
+    // Use map + closure to trigger usage parsing after last chunk
     let stream = raw_stream.map(move |result| match result {
         Ok(bytes) => {
             if let Ok(mut buf) = buf_clone.lock() {
@@ -857,16 +857,16 @@ fn build_stream_response(
         Err(e) => Err(e.to_string()),
     });
 
-    // 用 chain + once 在流结束后触发解析
+    // Use chain + once to trigger parsing after stream ends
     let buf_for_end = usage_buf;
     let end_signal = futures_util::stream::once(async move {
-        // 流结束，解析 buffer
+        // Stream ended, parse buffer
         if let Some(tracker) = tracker_clone {
             if let Ok(buf) = buf_for_end.lock() {
                 if !buf.is_empty() {
                     if let Some(usage) = crate::token_tracker::extract_usage_from_sse(&buf, "") {
                         println!(
-                            "[Proxy] Token 统计: input={} output={} total={} model={}",
+                            "[Proxy] Token stats: input={} output={} total={} model={}",
                             usage.input_tokens,
                             usage.output_tokens,
                             usage.total_tokens,
@@ -877,29 +877,29 @@ fn build_stream_response(
                 }
             }
         }
-        // 不产生数据帧，只是触发解析
-        Err("".to_string()) // 这个 Err 会被 StreamBody 忽略
+        // No data frame produced, just trigger parsing
+        Err("".to_string()) // This Err will be ignored by StreamBody
     })
-    // 过滤掉这个空 error，不让它传到客户端
+    // Filter out this empty error, don't let it reach client
     .filter(|_| futures_util::future::ready(false));
 
     let combined = stream.chain(end_signal);
 
     builder
         .body(BodyExt::boxed(StreamBody::new(combined)))
-        .unwrap_or_else(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "流构建失败"))
+        .unwrap_or_else(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "Stream build failed"))
 }
 
-/// Full body 包装（用于错误响应等小数据）
+/// Full body wrapper (for error responses and small data)
 fn full_body(bytes: Bytes) -> ProxyBody {
     Full::new(bytes).map_err(|_| String::new()).boxed()
 }
 
 // ────────────────────────────────────────────────────────────────
-// WebSocket 代理
+// WebSocket proxy
 // ────────────────────────────────────────────────────────────────
 
-/// 检测是否为 WebSocket 升级请求
+/// Detect if request is WebSocket upgrade
 fn is_websocket_upgrade(req: &Request<Incoming>) -> bool {
     req.headers()
         .get("upgrade")
@@ -908,23 +908,23 @@ fn is_websocket_upgrade(req: &Request<Incoming>) -> bool {
         .unwrap_or(false)
 }
 
-/// 处理 WebSocket 代理：连接上游 + 双向桥接
+/// Handle WebSocket proxy: connect upstream + bidirectional bridge
 async fn handle_websocket(
     state: Arc<ProxyState>,
     mut req: Request<Incoming>,
 ) -> Result<Response<ProxyBody>, Infallible> {
-    // 1. 获取 token 和上游地址
+    // 1. Get token and upstream address
     let (mut token, mut is_chatgpt) = match get_current_token(&state) {
         Ok(t) => t,
         Err(e) => return Ok(error_response(StatusCode::SERVICE_UNAVAILABLE, &e)),
     };
 
-    // 预检：如果当前账号没额度，先切号再连接
+    // Precheck: if current account has no quota, switch first then connect
     {
         let should_switch = {
             let store = match state.store.lock() {
                 Ok(s) => s,
-                Err(_) => return Ok(error_response(StatusCode::INTERNAL_SERVER_ERROR, "锁失败")),
+                Err(_) => return Ok(error_response(StatusCode::INTERNAL_SERVER_ERROR, "Lock failed")),
             };
             if let Some(current_id) = &store.current {
                 store
@@ -950,15 +950,15 @@ async fn handle_websocket(
         };
 
         if should_switch {
-            println!("[Proxy] WebSocket 预检：当前账号无额度，尝试切号...");
-            // 最多尝试 3 个候选号，查 API 确认有额度才切
+            println!("[Proxy] WebSocket precheck: current account has no quota, attempting switch...");
+            // Try up to 3 candidate accounts, check API to confirm quota before switching
             for _attempt in 0..3 {
                 if let PickResult::Found {
                     id,
                     token: new_token,
                 } = pick_next_account(&state)
                 {
-                    // 查 API 确认候选号是否真的有额度
+                    // Check API to confirm candidate really has quota
                     let has_quota = {
                         let (at, aid, rt) = {
                             let store = state.store.lock().map_err(|e| e.to_string()).ok();
@@ -986,7 +986,7 @@ async fn handle_websocket(
                             .await
                             {
                                 Ok((usage, _)) => {
-                                    // 更新缓存
+                                    // Update cache
                                     if let Ok(mut store) = state.store.lock() {
                                         if let Some(acc) = store.accounts.get_mut(&id) {
                                             acc.cached_quota = Some(crate::account::CachedQuota {
@@ -1008,7 +1008,7 @@ async fn handle_websocket(
                                     usage.five_hour_left > 0 && usage.weekly_left > 0
                                 }
                                 Err(e) => {
-                                    println!("[Proxy] 预检查询候选号额度失败: {}", e);
+                                    println!("[Proxy] Precheck candidate quota query failed: {}", e);
                                     false
                                 }
                             }
@@ -1021,16 +1021,16 @@ async fn handle_websocket(
                         if do_switch(&state, &id, SwitchReason::WebSocketPrecheck).is_ok() {
                             is_chatgpt = new_token.starts_with("eyJ");
                             token = new_token;
-                            println!("[Proxy] WebSocket 预检切号成功（已确认有额度）");
+                            println!("[Proxy] WebSocket precheck switch successful (quota confirmed)");
                         }
                         break;
                     } else {
-                        println!("[Proxy] 候选号无额度，跳过继续找...");
-                        // 标记为耗尽，下次不再选
+                        println!("[Proxy] Candidate has no quota, skipping to find next...");
+                        // Mark as depleted, don't select next time
                         mark_account_quota_depleted(&state, &id);
                     }
                 } else {
-                    println!("[Proxy] 无可用候选号");
+                    println!("[Proxy] No available candidates");
                     break;
                 }
             }
@@ -1049,19 +1049,19 @@ async fn handle_websocket(
         .replacen("https://", "wss://", 1)
         .replacen("http://", "ws://", 1);
 
-    // 2. 构建上游 WebSocket 请求（透明 header 转发 + token 注入）
+    // 2. Build upstream WebSocket request (transparent header forwarding + token injection)
     let mut upstream_req: tungstenite::http::Request<()> =
         match ws_url.as_str().into_client_request() {
             Ok(r) => r,
             Err(e) => {
                 return Ok(error_response(
                     StatusCode::BAD_GATEWAY,
-                    &format!("WebSocket 请求构建失败: {}", e),
+                    &format!("WebSocket request build failed: {}", e),
                 ))
             }
         };
 
-    // 转发客户端 header（排除 WebSocket 握手专用 header，由 into_client_request 生成）
+    // Forward client header (exclude WebSocket handshake specific headers, generated by into_client_request)
     for (name, value) in req.headers() {
         let lower = name.as_str().to_lowercase();
         if matches!(
@@ -1081,14 +1081,14 @@ async fn handle_websocket(
             .insert(name.clone(), value.clone());
     }
 
-    // 注入 token
+    // Inject token
     if let Ok(auth_val) = HeaderValue::from_str(&format!("Bearer {}", token)) {
         upstream_req
             .headers_mut()
             .insert(hyper::header::AUTHORIZATION, auth_val);
     }
 
-    // 3. 连接上游 WebSocket（认证失败时自动切号重连）
+    // 3. Connect upstream WebSocket (auto switch and reconnect on auth failure)
     let connect_result = tokio_tungstenite::connect_async(upstream_req).await;
 
     let (upstream_ws, upstream_handshake_resp) = match connect_result {
@@ -1101,17 +1101,17 @@ async fn handle_websocket(
                 || err_lower.contains("forbidden");
 
             if !is_auth_err {
-                eprintln!("[Proxy] WebSocket 上游连接失败: {}", e);
+                eprintln!("[Proxy] WebSocket upstream connection failed: {}", e);
                 return Ok(error_response(
                     StatusCode::BAD_GATEWAY,
-                    &format!("WebSocket 上游连接失败: {}", e),
+                    &format!("WebSocket upstream connection failed: {}", e),
                 ));
             }
 
-            println!("[Proxy] WebSocket 认证失败 ({}), 尝试切号重连...", e);
+            println!("[Proxy] WebSocket auth failed ({}), attempting switch and reconnect...", e);
             mark_current_quota_depleted(&state);
 
-            // 切号重连，最多试 3 个号
+            // Switch and reconnect, try up to 3 accounts
             let mut retry_conn = None;
             for _attempt in 0..3 {
                 if let PickResult::Found { id, token: new_tok } = pick_next_account(&state) {
@@ -1132,7 +1132,7 @@ async fn handle_websocket(
                             r.headers_mut().insert(hyper::header::AUTHORIZATION, av);
                         }
                         if let Ok(c) = tokio_tungstenite::connect_async(r).await {
-                            println!("[Proxy] WebSocket 切号重连成功");
+                            println!("[Proxy] WebSocket switch and reconnect successful");
                             retry_conn = Some(c);
                             break;
                         }
@@ -1147,16 +1147,16 @@ async fn handle_websocket(
                 None => {
                     return Ok(error_response(
                         StatusCode::BAD_GATEWAY,
-                        "所有账号 WebSocket 连接均失败",
+                        "All account WebSocket connections failed",
                     ));
                 }
             }
         }
     };
 
-    println!("[Proxy] WebSocket 上游已连接");
+    println!("[Proxy] WebSocket upstream connected");
 
-    // 4. 计算 Sec-WebSocket-Accept 回复客户端
+    // 4. Calculate Sec-WebSocket-Accept to reply to client
     let ws_key = req
         .headers()
         .get("sec-websocket-key")
@@ -1166,17 +1166,17 @@ async fn handle_websocket(
 
     let accept_key = tungstenite::handshake::derive_accept_key(ws_key.as_bytes());
 
-    // 5. 提取 hyper upgrade handle（必须在返回 101 之前）
+    // 5. Extract hyper upgrade handle (must be before returning 101)
     let on_upgrade = hyper::upgrade::on(&mut req);
 
-    // 6. 构建 101 响应，转发上游的响应 header（x-codex-turn-state 等）
+    // 6. Build 101 response, forward upstream response header (x-codex-turn-state etc.)
     let mut response_builder = Response::builder()
         .status(StatusCode::SWITCHING_PROTOCOLS)
         .header("Upgrade", "websocket")
         .header("Connection", "Upgrade")
         .header("Sec-WebSocket-Accept", &accept_key);
 
-    // 转发上游响应 header（排除 WebSocket 握手 header）
+    // Forward upstream response header (exclude WebSocket handshake headers)
     for (name, value) in upstream_handshake_resp.headers() {
         let lower = name.as_str().to_lowercase();
         if matches!(
@@ -1197,9 +1197,9 @@ async fn handle_websocket(
 
     let response = response_builder
         .body(full_body(Bytes::new()))
-        .unwrap_or_else(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "101 构建失败"));
+        .unwrap_or_else(|_| error_response(StatusCode::INTERNAL_SERVER_ERROR, "101 build failed"));
 
-    // 7. 后台任务：upgrade 完成后双向桥接
+    // 7. Background task: bidirectional bridge after upgrade completes
     let disconnect = state.ws_disconnect.clone();
     tokio::spawn(async move {
         match on_upgrade.await {
@@ -1212,9 +1212,9 @@ async fn handle_websocket(
                 )
                 .await;
 
-                println!("[Proxy] WebSocket 客户端已升级，开始桥接");
+                println!("[Proxy] WebSocket client upgraded, starting bridge");
 
-                // 检查是否有待注入的切号通知消息
+                // Check if there's a pending switch notification message to inject
                 let inject_text = PENDING_INJECT_MSG.lock().ok().and_then(|mut m| m.take());
                 if let Some(msg_text) = inject_text {
                     let inject_json = serde_json::json!({
@@ -1226,22 +1226,22 @@ async fn handle_websocket(
                         tungstenite::Message::Text(inject_json.to_string().into()),
                     )
                     .await;
-                    println!("[Proxy] 已注入切号通知到 WebSocket");
+                    println!("[Proxy] Injected switch notification to WebSocket");
                 }
 
                 bridge_websockets(client_ws, upstream_ws, disconnect, state).await;
-                println!("[Proxy] WebSocket 连接已关闭");
+                println!("[Proxy] WebSocket connection closed");
             }
-            Err(e) => eprintln!("[Proxy] WebSocket upgrade 失败: {}", e),
+            Err(e) => eprintln!("[Proxy] WebSocket upgrade failed: {}", e),
         }
     });
 
     Ok(response)
 }
 
-/// 检测 WebSocket 消息是否为限额错误
-/// 只匹配 response.failed 类型的错误消息，避免误判正常消息中的 rate_limit 字段
-/// 限额关键词（快速文本匹配用）
+/// Detect if WebSocket message is rate limit error
+/// Only match response.failed type error messages, avoid false positives on rate_limit fields in normal messages
+/// Rate limit keywords (for fast text matching)
 const RATE_LIMIT_KEYWORDS: &[&str] = &[
     "rate_limit",
     "rate limit",
@@ -1258,45 +1258,45 @@ fn detect_ws_rate_limit(msg: &tungstenite::Message) -> bool {
     if let tungstenite::Message::Text(ref text) = msg {
         let lower = text.to_lowercase();
 
-        // 快速文本匹配
+        // Fast text matching
         let matched = RATE_LIMIT_KEYWORDS.iter().any(|kw| lower.contains(kw));
         if !matched {
             return false;
         }
 
-        println!("[Proxy] WS 消息包含限额关键词");
+        println!("[Proxy] WS message contains rate limit keywords");
 
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
             let msg_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
-            // response.failed / error 类型直接判定
+            // response.failed / error type direct detection
             if msg_type == "response.failed" || msg_type == "error" {
-                println!("[Proxy] WS 限额: type={}", msg_type);
+                println!("[Proxy] WS rate limit: type={}", msg_type);
                 return true;
             }
 
-            // 有 error 字段也判定
+            // Has error field also counts
             if val.get("response").and_then(|r| r.get("error")).is_some()
                 || val.get("error").is_some()
             {
-                println!("[Proxy] WS 限额: 有 error 字段");
+                println!("[Proxy] WS rate limit: has error field");
                 return true;
             }
         }
 
-        // JSON 解析失败或没有 error 字段，但文本明确包含限额消息
+        // JSON parse failed or no error field, but text clearly contains rate limit message
         if lower.contains("hit your usage limit")
             || lower.contains("rate limit reached")
             || lower.contains("too many requests")
         {
-            println!("[Proxy] WS 限额: 文本兜底匹配");
+            println!("[Proxy] WS rate limit: text fallback match");
             return true;
         }
     }
     false
 }
 
-/// 封号关键词
+/// Ban keywords
 const BANNED_KEYWORDS: &[&str] = &[
     "deactivated",
     "banned",
@@ -1309,7 +1309,7 @@ fn detect_ws_banned(msg: &tungstenite::Message) -> bool {
     if let tungstenite::Message::Text(ref text) = msg {
         let lower = text.to_lowercase();
 
-        // 快速文本匹配
+        // Fast text matching
         if !BANNED_KEYWORDS.iter().any(|kw| lower.contains(kw)) {
             return false;
         }
@@ -1321,7 +1321,7 @@ fn detect_ws_banned(msg: &tungstenite::Message) -> bool {
                 return true;
             }
 
-            // error 字段里包含封号关键词
+            // error field contains ban keywords
             if val.get("response").and_then(|r| r.get("error")).is_some()
                 || val.get("error").is_some()
             {
@@ -1332,9 +1332,9 @@ fn detect_ws_banned(msg: &tungstenite::Message) -> bool {
     false
 }
 
-/// 双向桥接两个 WebSocket 连接
-/// - 切号信号 → 断开连接
-/// - 检测到限额/封号消息 → 断开连接（代理会在下次连接时预检切号）
+/// Bidirectional bridge between two WebSocket connections
+/// - Switch signal → disconnect
+/// - Detect rate limit/ban message → disconnect (proxy will precheck switch on next connection)
 async fn bridge_websockets<S1, S2>(
     client: S1,
     upstream: S2,
@@ -1373,10 +1373,10 @@ async fn bridge_websockets<S1, S2>(
         while let Some(msg) = upstream_read.next().await {
             match msg {
                 Ok(msg) => {
-                    // 检测限额错误（仅解析 response.failed 类型）
+                    // Detect rate limit error (only parse response.failed type)
                     if detect_ws_rate_limit(&msg) {
                         println!(
-                            "[Proxy] WebSocket 检测到限额错误（response.failed），触发切号..."
+                            "[Proxy] WebSocket detected rate limit error (response.failed), triggering switch..."
                         );
                         mark_current_quota_depleted(&state_clone);
                         let _ = client_write.send(msg).await;
@@ -1385,9 +1385,9 @@ async fn bridge_websockets<S1, S2>(
                         }
                         break;
                     }
-                    // 检测封号
+                    // Detect ban
                     if detect_ws_banned(&msg) {
-                        println!("[Proxy] WebSocket 检测到封号（response.failed），触发切号...");
+                        println!("[Proxy] WebSocket detected ban (response.failed), triggering switch...");
                         mark_current_banned(&state_clone);
                         let _ = client_write.send(msg).await;
                         if let PickResult::Found { id, .. } = pick_next_account(&state_clone) {
@@ -1413,7 +1413,7 @@ async fn bridge_websockets<S1, S2>(
         _ = client_to_upstream => {},
         _ = upstream_to_client => {},
         _ = disconnect.notified() => {
-            println!("[Proxy] 账号已切换，断开 WebSocket 连接（Codex App 将自动重连）");
+            println!("[Proxy] Account switched, disconnecting WebSocket (Codex App will auto-reconnect)");
         },
     }
 }

@@ -61,7 +61,7 @@ export function Proxy() {
             setStatus(st);
             setPort(s.proxy_port);
         } catch (e) {
-            console.error('加载代理状态失败:', e);
+            console.error('Failed to load proxy status:', e);
         }
     };
 
@@ -91,10 +91,10 @@ export function Proxy() {
             await invoke('update_settings', {
                 settings: { ...settings, proxy_enabled: enabled, proxy_port: port },
             });
-            setMessage({ type: 'success', text: enabled ? '代理已启动' : '代理已停止' });
+            setMessage({ type: 'success', text: enabled ? 'Proxy started' : 'Proxy stopped' });
             setTimeout(() => setMessage(null), 3000);
         } catch (e) {
-            setMessage({ type: 'error', text: `操作失败: ${e}` });
+            setMessage({ type: 'error', text: `Operation failed: ${e}` });
         } finally {
             setSaving(false);
         }
@@ -107,10 +107,10 @@ export function Proxy() {
             await invoke('update_settings', {
                 settings: { ...settings, proxy_port: port },
             });
-            setMessage({ type: 'success', text: '端口已更新（重启代理后生效）' });
+            setMessage({ type: 'success', text: 'Port updated (effective after proxy restart)' });
             setTimeout(() => setMessage(null), 3000);
         } catch (e) {
-            setMessage({ type: 'error', text: `保存失败: ${e}` });
+            setMessage({ type: 'error', text: `Save failed: ${e}` });
         } finally {
             setSaving(false);
         }
@@ -121,7 +121,7 @@ export function Proxy() {
         setMessage(null);
         try {
             const result = await invoke<string>('set_proxy_env', { port, enable });
-            setMessage({ type: 'success', text: result + '（新终端窗口生效）' });
+            setMessage({ type: 'success', text: result + ' (effective in new terminal windows)' });
             setTimeout(() => setMessage(null), 5000);
         } catch (e) {
             setMessage({ type: 'error', text: `${e}` });
@@ -149,10 +149,10 @@ export function Proxy() {
     return (
         <div className="proxy-page">
             <div className="proxy-header">
-                <h2>代理服务</h2>
+                <h2>Proxy Service</h2>
                 <div className={`proxy-status-badge ${isRunning ? 'running' : 'stopped'}`}>
                     <span className="status-dot" />
-                    {isRunning ? '运行中' : '已停止'}
+                    {isRunning ? 'Running' : 'Stopped'}
                 </div>
             </div>
 
@@ -164,18 +164,18 @@ export function Proxy() {
 
             {switchedAccount && (
                 <div className="settings-message success">
-                    代理已自动切换到账号: {switchedAccount}
+                    Proxy auto-switched to account: {switchedAccount}
                 </div>
             )}
 
-            {/* 代理开关 */}
+            {/* Proxy Toggle */}
             <div className="settings-section">
-                <h3>代理控制</h3>
+                <h3>Proxy Control</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">本地代理服务器</span>
+                        <span className="setting-label">Local Proxy Server</span>
                         <span className="setting-desc">
-                            Codex CLI 通过代理连接 OpenAI，支持无中断自动切号和 429 智能重试
+                            Codex CLI connects to OpenAI via proxy, supports seamless auto-switch and 429 smart retry
                         </span>
                     </div>
                     <button
@@ -183,13 +183,13 @@ export function Proxy() {
                         onClick={() => toggleProxy(!isEnabled)}
                         disabled={saving}
                     >
-                        {saving ? '...' : isEnabled ? '关闭代理' : '启动代理'}
+                        {saving ? '...' : isEnabled ? 'Stop Proxy' : 'Start Proxy'}
                     </button>
                 </div>
 
                 <div className="setting-item sub-item">
                     <div className="setting-info">
-                        <span className="setting-label">代理端口</span>
+                        <span className="setting-label">Proxy Port</span>
                     </div>
                     <div className="port-input-group">
                         <input
@@ -202,7 +202,7 @@ export function Proxy() {
                         />
                         {port !== settings?.proxy_port && (
                             <button className="btn btn-sm btn-primary" onClick={savePort} disabled={saving}>
-                                <Save size={12} /> 保存
+                                <Save size={12} /> Save
                             </button>
                         )}
                     </div>
@@ -210,8 +210,8 @@ export function Proxy() {
 
                 <div className="setting-item sub-item">
                     <div className="setting-info">
-                        <span className="setting-label">允许局域网访问</span>
-                        <span className="setting-desc">开启后监听 `0.0.0.0`，同一局域网内的 Windows 可直接连接这台机器的代理</span>
+                        <span className="setting-label">Allow LAN Access</span>
+                        <span className="setting-desc">Listen on 0.0.0.0, Windows machines on same LAN can connect directly to this proxy</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -229,13 +229,13 @@ export function Proxy() {
                 </div>
             </div>
 
-            {/* 环境变量配置 */}
+            {/* Environment Variables */}
             <div className="settings-section">
-                <h3>环境变量</h3>
+                <h3>Environment Variables</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">手动启动</span>
-                        <span className="setting-desc">复制命令到终端运行</span>
+                        <span className="setting-label">Manual Launch</span>
+                        <span className="setting-desc">Copy command to terminal to run</span>
                     </div>
                     <button
                         className="copy-command-button"
@@ -255,8 +255,8 @@ export function Proxy() {
                 {status?.allow_lan && status.lan_base_url && (
                     <div className="setting-item">
                         <div className="setting-info">
-                            <span className="setting-label">局域网客户端</span>
-                            <span className="setting-desc">Windows 机器可把 `OPENAI_BASE_URL` 指向下面这个地址</span>
+                            <span className="setting-label">LAN Client</span>
+                            <span className="setting-desc">Windows machines can point OPENAI_BASE_URL to the address below</span>
                         </div>
                         <button
                             className="copy-command-button"
@@ -276,9 +276,9 @@ export function Proxy() {
 
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">全局代理（CLI + App 全覆盖）</span>
+                        <span className="setting-label">Global Proxy (CLI + App Full Coverage)</span>
                         <span className="setting-desc">
-                            同时写入 ~/.zshrc、launchctl 和 ~/.codex/config.toml，终端 CLI 和 Codex App 均走代理
+                            Write to ~/.zshrc, launchctl and ~/.codex/config.toml, both terminal CLI and Codex App use proxy
                         </span>
                     </div>
                     <div className="env-btn-group">
@@ -287,26 +287,26 @@ export function Proxy() {
                             onClick={() => handleSetEnv(true)}
                             disabled={envWriting}
                         >
-                            {envWriting ? '...' : '写入环境变量'}
+                            {envWriting ? '...' : 'Write Env Variable'}
                         </button>
                         <button
                             className="btn btn-sm btn-ghost"
                             onClick={() => handleSetEnv(false)}
                             disabled={envWriting}
                         >
-                            移除
+                            Remove
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* 定时额度刷新 */}
+            {/* Scheduled Quota Refresh */}
             <div className="settings-section">
-                <h3>定时额度刷新</h3>
+                <h3>Scheduled Quota Refresh</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">自动刷新账号额度</span>
-                        <span className="setting-desc">按最后更新时间排序，自动循环刷新所有账号的配额数据</span>
+                        <span className="setting-label">Auto Refresh Account Quota</span>
+                        <span className="setting-desc">Sort by last update time, auto cycle refresh all account quota data</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -326,8 +326,8 @@ export function Proxy() {
                     <>
                         <div className="setting-item sub-item">
                             <div className="setting-info">
-                                <span className="setting-label">刷新间隔（分钟/账号）</span>
-                                <span className="setting-desc">每个账号之间的刷新间隔</span>
+                                <span className="setting-label">Refresh Interval (minutes/account)</span>
+                                <span className="setting-desc">Interval between each account refresh</span>
                             </div>
                             <input
                                 type="number"
@@ -345,8 +345,8 @@ export function Proxy() {
                         </div>
                         <div className="setting-item sub-item">
                             <div className="setting-info">
-                                <span className="setting-label">每轮刷新账号数</span>
-                                <span className="setting-desc">每轮循环刷新多少个账号</span>
+                                <span className="setting-label">Accounts per Refresh Round</span>
+                                <span className="setting-desc">How many accounts to refresh per cycle</span>
                             </div>
                             <input
                                 type="number"
@@ -366,13 +366,13 @@ export function Proxy() {
                 )}
             </div>
 
-            {/* 通知设置 */}
+            {/* Notification Settings */}
             <div className="settings-section">
-                <h3>切号通知</h3>
+                <h3>Switch Notifications</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">macOS 系统通知</span>
-                        <span className="setting-desc">切号时在屏幕右上角弹出系统通知</span>
+                        <span className="setting-label">macOS System Notification</span>
+                        <span className="setting-desc">Show system notification at top-right corner when switching accounts</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -390,8 +390,8 @@ export function Proxy() {
                 </div>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">对话内注入通知（实验性）</span>
-                        <span className="setting-desc">切号后在 Codex 对话中插入一条切号提示消息。可能影响对话状态。</span>
+                        <span className="setting-label">Inject Conversation Notification (Experimental)</span>
+                        <span className="setting-desc">Insert a switch notification message in Codex conversation after switching. May affect conversation state.</span>
                     </div>
                     <label className="toggle">
                         <input
@@ -409,14 +409,14 @@ export function Proxy() {
                 </div>
             </div>
 
-            {/* Codex 配置 */}
+            {/* Codex Config */}
             <div className="settings-section">
-                <h3>Codex 配置</h3>
+                <h3>Codex Config</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">Fast 模式</span>
+                        <span className="setting-label">Fast Mode</span>
                         <span className="setting-desc">
-                            更快推理速度，但消耗 2x 额度。{fastMode ? '当前：已开启' : '当前：已关闭'}
+                            Faster inference speed, but consumes 2x quota. {fastMode ? 'Current: Enabled' : 'Current: Disabled'}
                         </span>
                     </div>
                     <button
@@ -432,19 +432,19 @@ export function Proxy() {
                             }
                         }}
                     >
-                        {fastMode ? '关闭 Fast' : '开启 Fast'}
+                        {fastMode ? 'Disable Fast' : 'Enable Fast'}
                     </button>
                 </div>
             </div>
 
-            {/* 进程管理 */}
+            {/* Process Management */}
             <div className="settings-section">
-                <h3>进程管理</h3>
+                <h3>Process Management</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">终止所有 Codex 进程</span>
+                        <span className="setting-label">Kill All Codex Processes</span>
                         <span className="setting-desc">
-                            强制终止所有运行中的 codex 进程，用于切换代理模式后重启或排错
+                            Force kill all running codex processes, used for restarting after proxy mode switch or troubleshooting
                         </span>
                     </div>
                     <button
@@ -452,18 +452,18 @@ export function Proxy() {
                         onClick={handleKill}
                         disabled={killing}
                     >
-                        {killing ? '终止中...' : '终止进程'}
+                        {killing ? 'Killing...' : 'Kill Processes'}
                     </button>
                 </div>
             </div>
 
-            {/* 智能切号策略 */}
+            {/* Smart Switch Strategy */}
             <div className="settings-section">
-                <h3>智能切号策略</h3>
+                <h3>Smart Switch Strategy</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">5h 配额预防性切号阈值</span>
-                        <span className="setting-desc">剩余配额低于此百分比时提前切号（0 = 仅 429 触发，推荐 10）</span>
+                        <span className="setting-label">5h Quota Preventive Switch Threshold</span>
+                        <span className="setting-desc">Preemptively switch when remaining quota falls below this percentage (0 = only triggered by 429, recommended 10)</span>
                     </div>
                     <div className="threshold-input-group">
                         <input
@@ -485,8 +485,8 @@ export function Proxy() {
                 </div>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">周配额预防性切号阈值</span>
-                        <span className="setting-desc">剩余周配额低于此百分比时提前切号（0 = 仅 429 触发，推荐 5）</span>
+                        <span className="setting-label">Weekly Quota Preventive Switch Threshold</span>
+                        <span className="setting-desc">Preemptively switch when remaining weekly quota falls below this percentage (0 = only triggered by 429, recommended 5)</span>
                     </div>
                     <div className="threshold-input-group">
                         <input
@@ -508,8 +508,8 @@ export function Proxy() {
                 </div>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">Free 账号保护线</span>
-                        <span className="setting-desc">Free 账号剩余配额低于此百分比时强制切号（0 = 不特殊处理，推荐 35）</span>
+                        <span className="setting-label">Free Account Guard Line</span>
+                        <span className="setting-desc">Force switch when Free account remaining quota falls below this percentage (0 = no special handling, recommended 35)</span>
                     </div>
                     <div className="threshold-input-group">
                         <input

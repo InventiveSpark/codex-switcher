@@ -17,8 +17,8 @@ export function ConfirmModal({
     isOpen,
     title,
     message,
-    confirmText = '确认',
-    cancelText = '取消',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
     onConfirm,
     onCancel,
     isLoading = false,
@@ -40,17 +40,17 @@ export function ConfirmModal({
                 </div>
 
                 <div className="confirm-footer">
-                    <button className="btn-cancel" onClick={onCancel} disabled={isLoading}>
-                        {cancelText}
-                    </button>
-                    {extraActionText && onExtraAction && (
-                        <button className="btn-extra" onClick={onExtraAction} disabled={isLoading}>
-                            {extraActionText}
-                        </button>
-                    )}
-                    <button className="btn-confirm" onClick={onConfirm} disabled={isLoading}>
-                        {isLoading ? '正在切换...' : confirmText}
-                    </button>
+                            <button className="btn-cancel" onClick={onCancel} disabled={isLoading}>
+                                {cancelText}
+                            </button>
+                            {extraActionText && onExtraAction && (
+                                <button className="btn-extra" onClick={onExtraAction} disabled={isLoading}>
+                                    {extraActionText}
+                                </button>
+                            )}
+                            <button className="btn-confirm" onClick={onConfirm} disabled={isLoading}>
+                                {isLoading ? 'Switching...' : confirmText}
+                            </button>
                 </div>
             </div>
         </div>

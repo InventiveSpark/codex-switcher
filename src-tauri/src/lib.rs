@@ -1,6 +1,6 @@
-//! Codex Switcher - Tauri 主入口
+//! Codex Switcher - Tauri main entry
 //!
-//! 暴露所有 Tauri 命令供前端调用
+//! Expose all Tauri commands for frontend
 
 mod account;
 mod ide_control;
@@ -32,7 +32,7 @@ struct QuarantineFixTicket {
 
 fn allow_local_refresh_for_quota(is_current: bool) -> bool {
     let _ = is_current;
-    // 统一禁用配额查询路径下的本地 refresh。防止非当前账号消耗旧 refresh_token。
+    // Disable local refresh on quota query path. Prevents non-current accounts from consuming old refresh_token.
     false
 }
 
@@ -40,7 +40,7 @@ fn detect_sync_conflict_for_current(
     account: &Account,
     disk_auth: &serde_json::Value,
 ) -> Option<String> {
-    // 身份不一致时不应提示“Token 冲突”，避免误判
+    // Don't show "Token conflict" when identities don't match to avoid false positives
     if !AccountStore::auth_identity_matches(&account.auth_json, disk_auth) {
         return None;
     }
@@ -48,10 +48,10 @@ fn detect_sync_conflict_for_current(
     let official_rt = AccountStore::extract_refresh_token(disk_auth);
     let local_rt = AccountStore::extract_refresh_token(&account.auth_json);
 
-    // 如果官方 Token 存在且与本地不同（通常是更新了），则视为冲突
+    // If official Token exists and differs from local (usually updated), treat as conflict
     if official_rt.is_some() && official_rt != local_rt {
         let disk_email =
-            AccountStore::extract_email(disk_auth).unwrap_or_else(|| "未知账号".to_string());
+            AccountStore::extract_email(disk_auth).unwrap_or_else(|| "Unknown account".to_string());
         if disk_email == account.name {
             return Some(account.name.clone());
         } else {
@@ -62,14 +62,14 @@ fn detect_sync_conflict_for_current(
     None
 }
 
-/// 应用状态
+/// App state
 pub struct AppState {
     pub store: std::sync::Arc<std::sync::Mutex<AccountStore>>,
     pub scheduler: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub proxy_handle: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub proxy_stats: std::sync::Arc<proxy::ProxyStats>,
     pub token_tracker: std::sync::Arc<token_tracker::TokenTracker>,
-    /// 切号时通知所有 WebSocket 连接断开重连
+    /// Notify all WebSocket connections to reconnect on switch
     pub ws_disconnect: std::sync::Arc<tokio::sync::Notify>,
     pub switch_logger: std::sync::Arc<switch_log::SwitchLogger>,
     pub quota_refresh_handle: std::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
@@ -115,13 +115,13 @@ impl AppState {
         let now = Utc::now();
         match slot.take() {
             Some(stored) if stored.expires_at < now => {
-                Err("安全确认已过期，请重新点击修复".to_string())
+                Err("Security confirmation expired, please click fix again".to_string())
             }
             Some(stored) if stored.value != provided_ticket => {
-                Err("安全确认无效，请重新点击修复".to_string())
+                Err("Security confirmation invalid, please click fix again".to_string())
             }
             Some(_) => Ok(()),
-            None => Err("缺少安全确认，请重新点击修复".to_string()),
+            None => Err("Missing security confirmation, please click fix again".to_string()),
         }
     }
 }
@@ -132,28 +132,28 @@ impl Default for AppState {
     }
 }
 
-/// 获取所有账号
+/// Get all accounts
 #[tauri::command]
 fn get_accounts(state: State<AppState>) -> Result<Vec<Account>, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
     Ok(store.list_accounts().into_iter().cloned().collect())
 }
 
-/// 获取当前激活的账号 ID
+/// Get current active account ID
 #[tauri::command]
 fn get_current_account_id(state: State<AppState>) -> Result<Option<String>, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
     Ok(store.current.clone())
 }
 
-/// 获取全局设置
+/// Get global settings
 #[tauri::command]
 fn get_settings(state: State<AppState>) -> Result<account::AppSettings, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
     Ok(store.settings.clone())
 }
 
-/// 代理状态信息
+/// Proxy status info
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ProxyStatus {
     pub enabled: bool,
@@ -175,7 +175,7 @@ fn detect_lan_ipv4() -> Option<Ipv4Addr> {
     }
 }
 
-/// 获取代理状态
+/// Get proxy status
 #[tauri::command]
 fn get_proxy_status(state: State<AppState>) -> Result<ProxyStatus, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
@@ -206,7 +206,7 @@ fn get_proxy_status(state: State<AppState>) -> Result<ProxyStatus, String> {
     })
 }
 
-/// 更新全局设置
+/// Update global settings
 #[tauri::command]
 fn update_settings(
     state: State<AppState>,
@@ -233,10 +233,10 @@ fn update_settings(
         prev
     };
 
-    // 联动刷新托盘菜单文案 (同步更新“下个账号”预览)
+    // Refresh tray menu text (sync update "next account" preview)
     crate::tray::update_tray_menu(&app);
 
-    // 后台刷新生命周期
+    // Background refresh lifecycle
     let mut scheduler_handle = state.scheduler.lock().map_err(|e| e.to_string())?;
     match (prev_bg_refresh, settings.background_refresh) {
         (false, true) => {
@@ -253,7 +253,7 @@ fn update_settings(
         _ => {}
     }
 
-    // 代理生命周期
+    // Proxy lifecycle
     let mut proxy_handle = state.proxy_handle.lock().map_err(|e| e.to_string())?;
     let proxy_config_changed =
         prev_proxy_port != settings.proxy_port || prev_proxy_allow_lan != settings.proxy_allow_lan;
@@ -271,13 +271,13 @@ fn update_settings(
                     state.switch_logger.clone(),
                 );
                 *proxy_handle = Some(handle);
-                println!("[Proxy] 代理已启动 (端口 {})", settings.proxy_port);
+                println!("[Proxy] Proxy started (port {})", settings.proxy_port);
             }
         }
         (true, false) => {
             if let Some(handle) = proxy_handle.take() {
                 handle.abort();
-                println!("[Proxy] 代理已停止");
+                println!("[Proxy] Proxy stopped");
             }
         }
         (true, true) if proxy_config_changed => {
@@ -296,14 +296,14 @@ fn update_settings(
             );
             *proxy_handle = Some(handle);
             println!(
-                "[Proxy] 代理已重启 (端口 {}, 局域网访问: {})",
+                "[Proxy] Proxy restarted (port {}, LAN access: {})",
                 settings.proxy_port, settings.proxy_allow_lan
             );
         }
         _ => {}
     }
 
-    // 定时额度刷新生命周期
+    // Scheduled quota refresh lifecycle
     let mut qr_handle = state
         .quota_refresh_handle
         .lock()
@@ -313,13 +313,13 @@ fn update_settings(
             if qr_handle.is_none() {
                 let handle = start_quota_refresh(state.store.clone(), app.clone());
                 *qr_handle = Some(handle);
-                println!("[QuotaRefresh] 定时额度刷新已启动");
+                println!("[QuotaRefresh] Scheduled quota refresh started");
             }
         }
         (true, false) => {
             if let Some(handle) = qr_handle.take() {
                 handle.abort();
-                println!("[QuotaRefresh] 定时额度刷新已停止");
+                println!("[QuotaRefresh] Scheduled quota refresh stopped");
             }
         }
         _ => {}
@@ -329,7 +329,7 @@ fn update_settings(
     Ok(())
 }
 
-/// 从当前 Codex 登录状态导入账号
+/// Import account from current Codex login state
 #[tauri::command]
 fn import_current_account(
     state: State<AppState>,
@@ -339,7 +339,7 @@ fn import_current_account(
 ) -> Result<Account, String> {
     let auth_json = AccountStore::read_codex_auth()?;
     if AccountStore::extract_refresh_token(&auth_json).is_none() {
-        return Err("当前 auth.json 缺少 refresh_token，无法自动续期，请重新登录".to_string());
+        return Err("Current auth.json missing refresh_token, cannot auto-renew. Please sign in again".to_string());
     }
 
     let account = {
@@ -354,17 +354,17 @@ fn import_current_account(
 
 // is_token_expired removed: align with Codex last_refresh-based refresh
 
-/// 检查当前 IDE 中的账号是否有未同步的 Token 更新
+/// Check if account in current IDE has unsynced Token updates
 #[tauri::command]
 fn check_sync_conflict(state: State<AppState>) -> Result<Option<String>, String> {
     let auth_json = match AccountStore::read_codex_auth() {
         Ok(a) => a,
-        Err(_) => return Ok(None), // 如果由于文件不存在等原因读取失败，视为无冲突
+        Err(_) => return Ok(None), // If read fails (file not found etc.), treat as no conflict
     };
 
     let store = state.store.lock().map_err(|e| e.to_string())?;
 
-    // 检查这个 auth.json 是否属于我们当前的活跃账号，且内容是否有变
+    // Check if auth.json belongs to current active account and if content changed
     if let Some(current_id) = &store.current {
         if let Some(account) = store.accounts.get(current_id) {
             if let Some(name) = detect_sync_conflict_for_current(account, &auth_json) {
@@ -376,7 +376,7 @@ fn check_sync_conflict(state: State<AppState>) -> Result<Option<String>, String>
     Ok(None)
 }
 
-/// 删除账号
+/// Delete account
 #[tauri::command]
 fn delete_account(state: State<AppState>, app: tauri::AppHandle, id: String) -> Result<(), String> {
     {
@@ -386,13 +386,13 @@ fn delete_account(state: State<AppState>, app: tauri::AppHandle, id: String) -> 
         }
         store.delete_account(&id)?;
         store.save()?;
-    } // 锁在这里释放
-      // 联动刷新托盘菜单（需要重新获取锁，不会死锁）
+    } // Lock released here
+      // Refresh tray menu (needs re-acquire lock, no deadlock)
     crate::tray::update_tray_menu(&app);
     Ok(())
 }
 
-/// 更新账号信息
+/// Update account info
 #[tauri::command]
 fn update_account(
     state: State<AppState>,
@@ -410,7 +410,7 @@ fn update_account(
     Ok(())
 }
 
-/// 设置账号级”非活跃保活刷新”开关
+/// Set account-level "inactive keep-alive refresh" toggle
 #[tauri::command]
 fn set_account_inactive_refresh_enabled(
     state: State<AppState>,
@@ -423,14 +423,14 @@ fn set_account_inactive_refresh_enabled(
     Ok(())
 }
 
-/// 导出所有账号配置
+/// Export all account configurations
 #[tauri::command]
 fn export_accounts(state: State<AppState>) -> Result<String, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
     store.export()
 }
 
-/// 导入账号配置
+/// Import account configuration
 #[tauri::command]
 fn import_accounts(
     state: State<AppState>,
@@ -441,7 +441,7 @@ fn import_accounts(
     let missing = new_store.accounts_missing_refresh_token();
     if !missing.is_empty() {
         return Err(format!(
-            "以下账号缺少 refresh_token，无法自动续期，请重新登录后再导入: {}",
+            "The following accounts are missing refresh_token and cannot auto-renew. Please sign in again before importing: {}",
             missing.join(", ")
         ));
     }
@@ -454,7 +454,7 @@ fn import_accounts(
     Ok(())
 }
 
-/// 完成 OAuth 登录并保存账号
+/// Complete OAuth login and save account
 #[tauri::command]
 async fn finalize_oauth_login(
     state: tauri::State<'_, AppState>,
@@ -463,14 +463,14 @@ async fn finalize_oauth_login(
 ) -> Result<Account, String> {
     let token_res = oauth_server::complete_oauth_login(code).await?;
     if token_res.refresh_token.is_none() {
-        return Err("OAuth 未返回 refresh_token，无法自动续期".to_string());
+        return Err("OAuth did not return refresh_token, cannot auto-renew".to_string());
     }
 
     let user_info = token_res
         .id_token
         .as_ref()
         .and_then(|id_t| oauth::parse_user_info(id_t))
-        .ok_or("无法从授权响应中解析用户信息 (Missing ID Token)")?;
+        .ok_or("Failed to parse user info from authorization response (Missing ID Token)")?;
 
     let account = {
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
@@ -493,7 +493,7 @@ async fn finalize_oauth_login(
         let mut account = store.add_account(
             user_info.email,
             auth_json,
-            Some("OpenAI OAuth 登录".to_string()),
+            Some("OpenAI OAuth Login".to_string()),
         );
 
         account.refresh_token = token_res.refresh_token.clone();
@@ -508,37 +508,37 @@ async fn finalize_oauth_login(
     Ok(account)
 }
 
-// 补充 AppState 的辅助方法以方便在 finalize_oauth_login 中获取 AppHandle 是不行的，
-// 因为 finalize_oauth_login 是 async 且 Command 宏会处理。
-// 我们直接给 finalize_oauth_login 增加 AppHandle 参数。
+// Adding helper methods to AppState for accessing AppHandle in finalize_oauth_login won't work
+// because finalize_oauth_login is async and the Command macro handles it.
+// We directly add AppHandle parameter to finalize_oauth_login.
 
-/// 切换到指定账号（异步版本，不做本地 Token 续期）
+/// Switch to specified account (async version, no local Token refresh)
 #[tauri::command]
 async fn switch_account(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     id: String,
 ) -> Result<(), String> {
-    // 0. 切换前仅同步“当前激活账号”与官方 auth.json，避免全表匹配导致串号
+    // 0. Before switching, sync "current active account" with official auth.json only
     if let Ok(current_auth) = AccountStore::read_codex_auth() {
         if let Ok(mut store) = state.store.lock() {
             if let Some(current_id) = store.current.clone() {
                 if store.sync_account_from_auth_json(&current_id, current_auth) {
                     if let Err(e) = store.save() {
-                        eprintln!("[Sync] 保存当前账号失败: {}", e);
+                        eprintln!("[Sync] Failed to save current account: {}", e);
                     }
                 }
             }
         }
     }
 
-    // 1. 获取目标账号的校验凭据
+    // 1. Get target account verification credentials
     let (target_id, access_token, refresh_token, account_id) = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
         let account = store
             .accounts
             .get(&id)
-            .ok_or_else(|| format!("账号 {} 不存在", id))?;
+            .ok_or_else(|| format!("Account {} not found", id))?;
 
         let access_token = account
             .auth_json
@@ -546,7 +546,7 @@ async fn switch_account(
             .and_then(|t| t.get("access_token"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or("账号缺少 access_token")?;
+            .ok_or("Account missing access_token")?;
 
         let refresh_token = account.refresh_token.clone();
 
@@ -565,20 +565,20 @@ async fn switch_account(
         (account.id.clone(), access_token, refresh_token, account_id)
     };
 
-    // 1.5. 检查 JWT 是否过期，如果过期则尝试刷新
+    // 1.5. Check if JWT expired, refresh if so
     let (access_token, refresh_token) = {
         let mut needs_refresh = false;
         if let Ok(claims) = AccountStore::extract_jwt_claims_from_token(&access_token) {
             if let Some(exp) = claims.get("exp").and_then(|v| v.as_i64()) {
                 let now = Utc::now().timestamp();
-                // 如果剩余时间小于 5 分钟，则触发刷新
+                // If remaining time < 5 minutes, trigger refresh
                 if exp - now < 300 {
-                    println!("[Switch] JWT 已过期或即将过期 ({}), 触发自动刷新", exp);
+                    println!("[Switch] JWT expired or expiring soon ({}), triggering auto-refresh", exp);
                     needs_refresh = true;
                 }
             }
         } else {
-            println!("[Switch] 无法解析 JWT Claims，尝试盲刷");
+            println!("[Switch] Cannot parse JWT Claims, attempting blind refresh");
             needs_refresh = true;
         }
 
@@ -586,7 +586,7 @@ async fn switch_account(
             if let Some(ref rt) = refresh_token {
                 match oauth::refresh_access_token(rt).await {
                     Ok(token_res) => {
-                        println!("[Switch] 自动刷新 Token 成功");
+                        println!("[Switch] Auto-refresh Token success");
                         let mut store = state.store.lock().map_err(|e| e.to_string())?;
                         if let Some(account) = store.accounts.get_mut(&target_id) {
                             AccountStore::apply_refreshed_tokens(
@@ -597,7 +597,7 @@ async fn switch_account(
                                 token_res.expires_in,
                             );
                             if let Err(e) = store.save() {
-                                eprintln!("[Store] 保存失败: {}", e);
+                                eprintln!("[Store] Save failed: {}", e);
                             }
                             (token_res.access_token, token_res.refresh_token)
                         } else {
@@ -605,7 +605,7 @@ async fn switch_account(
                         }
                     }
                     Err(e) => {
-                        println!("[Switch] 自动刷新 Token 失败: {}", e);
+                        println!("[Switch] Auto-refresh Token failed: {}", e);
                         (access_token, refresh_token)
                     }
                 }
@@ -617,10 +617,10 @@ async fn switch_account(
         }
     };
 
-    // 2. 预检（非阻断）：仅尝试读取配额缓存，不触发本地 refresh_token 刷新。
-    // 失败不阻断切换，交由 Codex 在实际请求中按需维护 token 生命周期。
+    // 2. Pre-check (non-blocking): Only try reading quota cache, no local refresh_token refresh.
+    // Failures don't block switching; let Codex handle token lifecycle on-demand.
     println!(
-        "[Switch] 预检目标账号配额（不触发本地 refresh）: {}",
+        "[Switch] Pre-check target account quota (no local refresh trigger): {}",
         target_id
     );
     match usage::UsageFetcher::fetch_usage_direct(access_token, account_id, refresh_token, false)
@@ -643,23 +643,23 @@ async fn switch_account(
                     updated_at: chrono::Utc::now(),
                 });
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
         }
         Err(e) => {
-            println!("[Switch] 预检配额失败（忽略，不阻断切换）: {}", e);
+            println!("[Switch] Pre-check quota failed (ignored, doesn't block switch): {}", e);
         }
     }
 
-    // 3. 执行切换 (写入 auth.json)
-    println!("[Switch] 执行切换...");
+    // 3. Execute switch (write auth.json)
+    println!("[Switch] Executing switch...");
     if !state
         .refresh_locks
         .acquire(&target_id, tokio::time::Duration::from_secs(5))
         .await
     {
-        return Err("该账号正在被其他流程刷新，请稍后重试".to_string());
+        return Err("This account is being refreshed by another process, please try again later".to_string());
     }
     let switch_result: Result<(), String> = {
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
@@ -670,9 +670,9 @@ async fn switch_account(
     };
     state.refresh_locks.release(&target_id).await;
     switch_result?;
-    println!("[Switch] 切换完成！");
+    println!("[Switch] Switch complete!");
 
-    // 记录切号日志
+    // Log account switch
     {
         let store = state.store.lock().map_err(|e| e.to_string())?;
         let from_name = store
@@ -699,25 +699,25 @@ async fn switch_account(
         );
     }
 
-    // 断开所有代理 WebSocket 连接，强制 Codex App 重连使用新 token
+    // Disconnect all proxy WebSocket connections, force Codex App to reconnect with new token
     state.ws_disconnect.notify_waiters();
-    println!("[Switch] 已通知代理断开 WebSocket 连接");
+    println!("[Switch] Notified proxy to disconnect WebSocket connections");
 
-    // 联动刷新托盘菜单
+    // Refresh tray menu
     crate::tray::update_tray_menu(&app);
     Ok(())
 }
 
-/// 预测下一个拟切换的账号信息 (仅基于缓存，不发起网络请求)
-/// 共享评分选号算法：基于 CachedQuota 的 reset_at 时间戳和剩余额度评分
-/// 返回 (account_id, account_name, score) 按得分从高到低排序
-/// 启动定时额度刷新调度器
+/// Predict next account to switch (cache-based only, no network requests)
+/// Shared scoring algorithm: based on CachedQuota reset_at timestamp and remaining quota
+/// Returns (account_id, account_name, score) sorted by score descending
+/// Start scheduled quota refresh scheduler
 pub fn start_quota_refresh(
     store: std::sync::Arc<std::sync::Mutex<AccountStore>>,
     app_handle: tauri::AppHandle,
 ) -> tauri::async_runtime::JoinHandle<()> {
     tauri::async_runtime::spawn(async move {
-        println!("[QuotaRefresh] 定时额度刷新已启动");
+        println!("[QuotaRefresh] Scheduled quota refresh started");
 
         loop {
             let (enabled, interval_minutes, batch_size) = {
@@ -734,7 +734,7 @@ pub fn start_quota_refresh(
                 continue;
             }
 
-            // 按 cached_quota.updated_at 排序，最旧的优先
+            // Sort by cached_quota.updated_at, oldest first
             let targets: Vec<(String, String)> = {
                 let s = store.lock().unwrap();
                 let mut accounts: Vec<_> = s
@@ -750,7 +750,7 @@ pub fn start_quota_refresh(
                         (a.id.clone(), a.name.clone(), updated)
                     })
                     .collect();
-                // 最旧的排前面
+                // Oldest first
                 accounts.sort_by_key(|(_, _, t)| *t);
                 accounts
                     .into_iter()
@@ -760,7 +760,7 @@ pub fn start_quota_refresh(
             };
 
             for (id, name) in &targets {
-                println!("[QuotaRefresh] 刷新 {} ...", name);
+                println!("[QuotaRefresh] Refreshing {} ...", name);
 
                 let (at, aid, rt) = {
                     let s = store.lock().unwrap();
@@ -775,7 +775,7 @@ pub fn start_quota_refresh(
                     )
                 };
 
-                // 没有 access_token 先用 refresh_token 换
+                // No access_token, use refresh_token to exchange
                 let access_token = match at {
                     Some(t) => t,
                     None => {
@@ -797,7 +797,7 @@ pub fn start_quota_refresh(
                                     res.access_token
                                 }
                                 Err(e) => {
-                                    println!("[QuotaRefresh] {} token 刷新失败: {}", name, e);
+                                    println!("[QuotaRefresh] {} token refresh failed: {}", name, e);
                                     continue;
                                 }
                             }
@@ -828,11 +828,11 @@ pub fn start_quota_refresh(
                             }
                         }
                         println!(
-                            "[QuotaRefresh] {} → 5h:{}% 周:{}%",
+                            "[QuotaRefresh] {} → 5h:{}% weekly:{}%",
                             name, usage.five_hour_left, usage.weekly_left
                         );
 
-                        // 记录自动刷新额度日志
+                        // Log auto-refresh quota
                         use tauri::Manager;
                         if let Some(logger) = app_handle
                             .try_state::<std::sync::Arc<crate::switch_log::SwitchLogger>>()
@@ -849,8 +849,8 @@ pub fn start_quota_refresh(
                         let _ = app_handle.emit("accounts-updated", ());
                     }
                     Err(e) => {
-                        println!("[QuotaRefresh] {} 额度查询失败: {}", name, e);
-                        // 封号/失效标记
+                        println!("[QuotaRefresh] {} quota query failed: {}", name, e);
+                        // Ban/invalid mark
                         if e.contains("ACCOUNT_BANNED") {
                             if let Ok(mut s) = store.lock() {
                                 if let Some(acc) = s.accounts.get_mut(id) {
@@ -870,14 +870,14 @@ pub fn start_quota_refresh(
                     }
                 }
 
-                // 每个号之间间隔 interval_minutes 分钟
+                // Interval of interval_minutes minutes between each account
                 tokio::time::sleep(tokio::time::Duration::from_secs(
                     u64::from(interval_minutes) * 60,
                 ))
                 .await;
             }
 
-            // 如果没有目标，等一轮
+            // If no targets, wait a round
             if targets.is_empty() {
                 tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
             }
@@ -911,7 +911,7 @@ pub fn score_candidate_accounts(store: &AccountStore) -> Vec<(String, String, f6
                     continue;
                 }
 
-                // Plan 优先级加分：pro > plus/team > free
+                // Plan priority bonus: pro > plus/team > free
                 let plan_bonus = match plan.as_str() {
                     "pro" => 30.0,
                     "plus" | "team" | "enterprise" => 20.0,
@@ -920,7 +920,7 @@ pub fn score_candidate_accounts(store: &AccountStore) -> Vec<(String, String, f6
                     _ => 10.0,
                 };
 
-                // 5h 可用度
+                // 5h availability
                 let five_h = if q.five_hour_left <= 0.0 {
                     match q.five_hour_reset_at {
                         Some(reset_at) if now >= reset_at => 50.0,
@@ -930,7 +930,7 @@ pub fn score_candidate_accounts(store: &AccountStore) -> Vec<(String, String, f6
                     q.five_hour_left
                 };
 
-                // 周可用度
+                // Weekly availability
                 let weekly = if q.weekly_left <= 0.0 {
                     match q.weekly_reset_at {
                         Some(reset_at) if now >= reset_at => 50.0,
@@ -944,7 +944,7 @@ pub fn score_candidate_accounts(store: &AccountStore) -> Vec<(String, String, f6
                 if effective <= 0.0 {
                     continue;
                 }
-                // 最终评分 = 额度分 + Plan 加分
+                // Final score = quota score + Plan bonus
                 effective + plan_bonus
             }
         };
@@ -952,12 +952,12 @@ pub fn score_candidate_accounts(store: &AccountStore) -> Vec<(String, String, f6
         scored.push((account.id.clone(), account.name.clone(), score));
     }
 
-    // 按得分从高到低排序
+    // Sort by score descending
     scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
     scored
 }
 
-/// 预测下一个最优账号（tray 菜单预览）
+/// Predict next optimal account (tray menu preview)
 pub fn predict_next_account_internal(state: tauri::State<'_, AppState>) -> Option<(String, i32)> {
     let store = state.store.lock().ok()?;
     let candidates = score_candidate_accounts(&store);
@@ -966,39 +966,39 @@ pub fn predict_next_account_internal(state: tauri::State<'_, AppState>) -> Optio
         .map(|(_, name, score)| (name.clone(), *score as i32))
 }
 
-/// 智能切号：选最优账号并切换
+/// Smart switch: select optimal account and switch
 pub async fn switch_to_next_account_internal(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // 1. 用评分算法选出最优候选
+    // 1. Use scoring algorithm to select optimal candidate
     let candidates = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
         score_candidate_accounts(&store)
     };
 
     if candidates.is_empty() {
-        return Err("没有可用账号".to_string());
+        return Err("No available accounts".to_string());
     }
 
-    // 2. 按得分从高到低尝试，查 API 确认额度后切换
+    // 2. Try from highest to lowest score, check API quota before switching
     for (target_id, target_name, score) in &candidates {
-        println!("[SmartSwitch] 候选: {} (评分 {:.0})", target_name, score);
+        println!("[SmartSwitch] Candidate: {} (score {:.0})", target_name, score);
 
-        // 查 API 确认最新额度
+        // Check API for latest quota
         let quota = match get_quota_internal(&state, target_id.clone()).await {
             Ok(u) => u,
             Err(e) => {
-                // 封号/失效/登出检测
+                // Ban/invalid/logout detection
                 if e.contains("ACCOUNT_BANNED")
                     || e.contains("TOKEN_INVALID")
                     || e.contains("ACCOUNT_LOGGED_OUT")
                 {
-                    println!("[SmartSwitch] 账号 {} 已封禁/失效/登出，跳过", target_name);
+                    println!("[SmartSwitch] Account {} banned/invalid/logged out, skipping", target_name);
                     continue;
                 }
                 println!(
-                    "[SmartSwitch] 账号 {} 额度查询失败: {}，跳过",
+                    "[SmartSwitch] Account {} quota query failed: {}, skipping",
                     target_name, e
                 );
                 continue;
@@ -1016,36 +1016,36 @@ pub async fn switch_to_next_account_internal(
 
         if has_quota {
             println!(
-                "[SmartSwitch] 选中最优账号: {} ({}, 5h={}%, 周={}%)",
+                "[SmartSwitch] Selected optimal account: {} ({}, 5h={}%, weekly={}%)",
                 target_name, quota.plan_type, quota.five_hour_left, quota.weekly_left
             );
             return switch_account(state, app.clone(), target_id.clone()).await;
         } else {
-            println!("[SmartSwitch] 账号 {} 额度已耗尽，继续找", target_name);
+            println!("[SmartSwitch] Account {} quota exhausted, continue searching", target_name);
         }
     }
 
-    Err("遍历完所有账号，未发现可用配额的账号".to_string())
+    Err("Checked all accounts, no account with available quota found".to_string())
 }
 
-/// 内部辅助：获取额度数据
+/// Internal helper: get quota data
 async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay, String> {
     let (access_token, account_id, refresh_token) = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
-        let account = store.accounts.get(&id).ok_or("账号不存在")?;
+        let account = store.accounts.get(&id).ok_or("Account does not exist")?;
         let at = AccountStore::extract_access_token(&account.auth_json);
         let aid = AccountStore::extract_account_id(&account.auth_json);
         let rt = account.refresh_token.clone();
         (at, aid, rt)
     };
 
-    // 如果没有 access_token，先用 refresh_token 换一个
+    // If no access_token, use refresh_token to exchange for one
     let access_token = if let Some(at) = access_token {
         at
     } else if let Some(ref rt) = refresh_token {
         match crate::oauth::refresh_access_token(rt).await {
             Ok(token_res) => {
-                // 保存新 token
+                // Save new token
                 let mut store = state.store.lock().map_err(|e| e.to_string())?;
                 if let Some(account) = store.accounts.get_mut(&id) {
                     AccountStore::apply_refreshed_tokens(
@@ -1056,21 +1056,21 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
                         token_res.expires_in,
                     );
                     if let Err(e) = store.save() {
-                        eprintln!("[Store] 保存失败: {}", e);
+                        eprintln!("[Store] Save failed: {}", e);
                     }
                 }
                 token_res.access_token
             }
-            Err(e) => return Err(format!("TOKEN_INVALID:刷新 token 失败: {}", e)),
+            Err(e) => return Err(format!("TOKEN_INVALID:Token refresh failed: {}", e)),
         }
     } else {
-        return Err("TOKEN_INVALID:无 access_token 且无 refresh_token".to_string());
+        return Err("TOKEN_INVALID:No access_token and no refresh_token".to_string());
     };
 
     let result =
         UsageFetcher::fetch_usage_direct(access_token, account_id, refresh_token, true).await;
 
-    // 检测封号/失效：分开标记
+    // Detect ban/invalid: mark separately
     if let Err(ref e) = result {
         if e.contains("ACCOUNT_BANNED") {
             let mut store = state.store.lock().map_err(|e| e.to_string())?;
@@ -1079,7 +1079,7 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
                 account.is_token_invalid = false;
                 account.is_logged_out = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1091,7 +1091,7 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
                 account.is_banned = false;
                 account.is_logged_out = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1103,7 +1103,7 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
                 account.is_banned = false;
                 account.is_token_invalid = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1112,7 +1112,7 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
 
     let (display, new_tokens) = result?;
 
-    // 如果产生了新 Token，保存
+    // If new Token generated, save
     if let Some(res) = new_tokens {
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
         if let Some(account) = store.accounts.get_mut(&id) {
@@ -1124,18 +1124,18 @@ async fn get_quota_internal(state: &AppState, id: String) -> Result<UsageDisplay
                 res.expires_in,
             );
             if let Err(e) = store.save() {
-                eprintln!("[Store] 保存失败: {}", e);
+                eprintln!("[Store] Save failed: {}", e);
             }
         }
     }
 
-    // 更新缓存
+    // Update cache
     {
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
         if let Some(account) = store.accounts.get_mut(&id) {
             account.cached_quota = Some(usage_to_cached(&display));
             if let Err(e) = store.save() {
-                eprintln!("[Store] 保存失败: {}", e);
+                eprintln!("[Store] Save failed: {}", e);
             }
         }
     }
@@ -1159,7 +1159,7 @@ fn usage_to_cached(u: &UsageDisplay) -> crate::account::CachedQuota {
     }
 }
 
-/// 将当前 Codex auth.json 强制同步到指定账号
+/// Force sync current Codex auth.json to specified account
 #[tauri::command]
 fn sync_current_auth_to_account(state: State<AppState>, id: String) -> Result<(), String> {
     let auth_json = AccountStore::read_codex_auth()?;
@@ -1168,23 +1168,23 @@ fn sync_current_auth_to_account(state: State<AppState>, id: String) -> Result<()
         store.save()?;
         return Ok(());
     }
-    Err("同步失败：账号不存在或 User ID 不匹配".to_string())
+    Err("Sync failed: Account not found or User ID mismatch".to_string())
 }
 
-/// 检查 Codex 是否已登录
+/// Check if Codex is signed in
 #[tauri::command]
 fn check_codex_login() -> Result<bool, String> {
     Ok(AccountStore::codex_auth_path().exists())
 }
 
-/// 获取指定账号的用量信息（不切换账号）
+/// Get specified account's usage info (without switching)
 #[tauri::command]
 async fn get_quota_by_id(
     state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
     id: String,
 ) -> Result<UsageDisplay, String> {
-    // 当前激活账号：先按 ~/.codex/auth.json 做身份校验与同步，再继续走 API 查询配额
+    // Current active account: verify identity via ~/.codex/auth.json first, then query quota via API
     let is_current = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
         store.current.as_deref() == Some(id.as_str())
@@ -1196,36 +1196,36 @@ async fn get_quota_by_id(
         let local_auth = store
             .accounts
             .get(&id)
-            .ok_or_else(|| format!("账号 {} 不存在", id))?
+            .ok_or_else(|| format!("Account {} not found", id))?
             .auth_json
             .clone();
 
         if !AccountStore::auth_identity_matches(&local_auth, &official_auth) {
             return Err(
-                "当前激活账号与 ~/.codex/auth.json 身份不匹配，已拒绝覆盖，请先在 Codex 中切回同一账号".to_string(),
+                "Current active account identity mismatch with ~/.codex/auth.json, overwrite rejected. Please switch to same account in Codex first".to_string(),
             );
         }
 
         if local_auth != official_auth {
             println!(
-                "[Quota] 当前激活账号 {}：检测到官方 auth.json 变更，按权威源同步。",
+                "[Quota] Current active account {}: Detected official auth.json change, syncing from authoritative source.",
                 id
             );
             if store.sync_account_from_auth_json(&id, official_auth) {
                 store.save()?;
             }
         } else {
-            println!("[Quota] 当前激活账号 {}：已与官方 auth.json 保持一致。", id);
+            println!("[Quota] Current active account {}: In sync with official auth.json.", id);
         }
     }
 
-    // 1. 从 Store 获取该账号的 Token
+    // 1. Get account Token from Store
     let (access_token_opt, account_id, refresh_token) = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
         let account = store
             .accounts
             .get(&id)
-            .ok_or_else(|| format!("账号 {} 不存在", id))?;
+            .ok_or_else(|| format!("Account {} not found", id))?;
 
         let at = AccountStore::extract_access_token(&account.auth_json);
         let aid = AccountStore::extract_account_id(&account.auth_json);
@@ -1237,7 +1237,7 @@ async fn get_quota_by_id(
         (at, aid, rt)
     };
 
-    // 如果没有 access_token，先用 refresh_token 换一个
+    // If no access_token, use refresh_token to exchange for one
     let access_token = if let Some(at) = access_token_opt {
         at
     } else if let Some(ref rt) = refresh_token {
@@ -1253,27 +1253,27 @@ async fn get_quota_by_id(
                         token_res.expires_in,
                     );
                     if let Err(e) = store.save() {
-                        eprintln!("[Store] 保存失败: {}", e);
+                        eprintln!("[Store] Save failed: {}", e);
                     }
                 }
                 token_res.access_token
             }
-            Err(e) => return Err(format!("TOKEN_INVALID:刷新 token 失败: {}", e)),
+            Err(e) => return Err(format!("TOKEN_INVALID:Token refresh failed: {}", e)),
         }
     } else {
-        return Err("TOKEN_INVALID:无 access_token 且无 refresh_token".to_string());
+        return Err("TOKEN_INVALID:No access_token and no refresh_token".to_string());
     };
 
-    // 2. 使用 Token 获取用量（允许自动刷新）
+    // 2. Use Token to fetch usage (allow auto-refresh)
     let result = UsageFetcher::fetch_usage_direct(
         access_token,
         account_id,
         refresh_token,
-        true, // 允许 refresh，解决 token 过期问题
+        true, // Allow refresh to solve token expiration
     )
     .await;
 
-    // 检测封号/失效：分开标记
+    // Detect ban/invalid: mark separately
     if let Err(ref e) = result {
         if e.contains("ACCOUNT_BANNED") {
             let mut store = state.store.lock().map_err(|e| e.to_string())?;
@@ -1282,7 +1282,7 @@ async fn get_quota_by_id(
                 account.is_token_invalid = false;
                 account.is_logged_out = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1294,7 +1294,7 @@ async fn get_quota_by_id(
                 account.is_banned = false;
                 account.is_logged_out = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1306,7 +1306,7 @@ async fn get_quota_by_id(
                 account.is_banned = false;
                 account.is_token_invalid = false;
                 if let Err(e) = store.save() {
-                    eprintln!("[Store] 保存失败: {}", e);
+                    eprintln!("[Store] Save failed: {}", e);
                 }
             }
             return Err(e.clone());
@@ -1315,11 +1315,11 @@ async fn get_quota_by_id(
 
     let (usage, new_tokens) = result?;
 
-    // 3. 如果有新 Token，更新该账号的数据
+    // 3. If new Token, update account data
     if let Some(tokens) = new_tokens {
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
         if let Some(account) = store.accounts.get_mut(&id) {
-            // 更新 auth_json 中的 Token 信息
+            // Update Token info in auth_json
             if let Some(obj) = account.auth_json.as_object_mut() {
                 if let Some(tokens_obj) = obj.get_mut("tokens").and_then(|v| v.as_object_mut()) {
                     tokens_obj.insert(
@@ -1348,7 +1348,7 @@ async fn get_quota_by_id(
                 }
             }
 
-            // 更新 refresh_token 字段
+            // Update refresh_token field
             if let Some(rt) = tokens.refresh_token {
                 account.refresh_token = Some(rt);
             }
@@ -1359,7 +1359,7 @@ async fn get_quota_by_id(
                 );
             }
 
-            // 更新配额缓存
+            // Update quota cache
             account.cached_quota = Some(account::CachedQuota {
                 five_hour_left: usage.five_hour_left as f64,
                 five_hour_reset: usage.five_hour_reset.clone(),
@@ -1376,7 +1376,7 @@ async fn get_quota_by_id(
         }
         store.save()?;
     } else {
-        // 即使没有新 Token，也更新配额缓存
+        // Even without new Token, update quota cache
         let mut store = state.store.lock().map_err(|e| e.to_string())?;
         if let Some(account) = store.accounts.get_mut(&id) {
             account.cached_quota = Some(account::CachedQuota {
@@ -1399,13 +1399,13 @@ async fn get_quota_by_id(
     Ok(usage)
 }
 
-/// 修复 Codex App 的隔离属性 (需要 sudo 权限)
+/// Fix Codex App quarantine attribute (requires sudo)
 #[tauri::command]
 fn request_quarantine_fix_ticket(state: State<AppState>) -> Result<String, String> {
     state.issue_quarantine_fix_ticket()
 }
 
-/// 修复 Codex App 的隔离属性 (需要 sudo 权限)
+/// Fix Codex App quarantine attribute (requires sudo)
 #[tauri::command]
 async fn fix_codex_quarantine(
     state: tauri::State<'_, AppState>,
@@ -1415,7 +1415,7 @@ async fn fix_codex_quarantine(
     ide_control::remove_quarantine()
 }
 
-/// 重载 IDE 窗口
+/// Reload IDE windows
 #[tauri::command]
 async fn reload_ide_windows(use_window_reload: bool) -> Result<Vec<String>, String> {
     let ides = ide_control::detect_running_ides();
@@ -1423,7 +1423,7 @@ async fn reload_ide_windows(use_window_reload: bool) -> Result<Vec<String>, Stri
 
     for ide in &ides {
         if let Err(e) = ide_control::reload_ide(ide, use_window_reload) {
-            println!("重载 {} 失败: {}", ide, e);
+            println!("Failed to reload {}: {}", ide, e);
         } else {
             reloaded.push(ide.clone());
         }
@@ -1432,26 +1432,26 @@ async fn reload_ide_windows(use_window_reload: bool) -> Result<Vec<String>, Stri
     Ok(reloaded)
 }
 
-/// 获取 Token 用量统计
+/// Get Token usage stats
 #[tauri::command]
 fn get_token_stats(state: State<AppState>) -> Result<token_tracker::UsageStats, String> {
     Ok(state.token_tracker.get_stats())
 }
 
-/// 重置 Token 用量统计
+/// Reset Token usage stats
 #[tauri::command]
 fn reset_token_stats(state: State<AppState>) -> Result<(), String> {
     state.token_tracker.reset();
     Ok(())
 }
 
-/// 获取 Token 使用历史（趋势图数据）
+/// Get Token usage history (trend chart data)
 #[tauri::command]
 fn get_token_history(days: u32) -> Result<Vec<token_tracker::TokenHistoryEntry>, String> {
     Ok(token_tracker::TokenTracker::get_history(days))
 }
 
-// ── Skills 管理命令 ──
+// ── Skills management commands ──
 
 #[tauri::command]
 fn get_installed_skills() -> Result<Vec<skills::InstalledSkill>, String> {
@@ -1469,7 +1469,7 @@ fn get_skill_repos() -> Result<Vec<skills::SkillRepo>, String> {
 fn add_skill_repo(owner: String, name: String, branch: String) -> Result<(), String> {
     let mut data = skills::SkillStore::load();
     if data.repos.iter().any(|r| r.owner == owner && r.name == name) {
-        return Err("仓库已存在".into());
+        return Err("Repo already exists".into());
     }
     data.repos.push(skills::SkillRepo { owner, name, branch, enabled: true });
     skills::SkillStore::save(&data)
@@ -1486,7 +1486,7 @@ fn remove_skill_repo(owner: String, name: String) -> Result<(), String> {
 async fn discover_skills() -> Result<Vec<skills::DiscoverableSkill>, String> {
     let data = skills::SkillStore::load();
     let mut discovered = skills::SkillStore::discover_skills(&data.repos).await;
-    // 标记已安装的
+    // Mark as installed
     let installed_dirs: std::collections::HashSet<String> = data.skills.iter().map(|s| s.directory.clone()).collect();
     for s in &mut discovered {
         s.installed = installed_dirs.contains(&s.directory);
@@ -1523,7 +1523,7 @@ fn get_skill_app_status() -> Result<std::collections::HashMap<String, bool>, Str
 fn get_skill_content(directory: String) -> Result<String, String> {
     let ssot = dirs::home_dir().unwrap().join(".codex-switcher").join("skills").join(&directory);
     let md_path = ssot.join("SKILL.md");
-    std::fs::read_to_string(&md_path).map_err(|e| format!("读取失败: {}", e))
+    std::fs::read_to_string(&md_path).map_err(|e| format!("Read failed: {}", e))
 }
 
 #[tauri::command]
@@ -1550,19 +1550,19 @@ fn get_switch_history(
     Ok(state.switch_logger.get_history(days))
 }
 
-/// 获取切号统计
+/// Get switch stats
 #[tauri::command]
 fn get_switch_stats(state: State<AppState>) -> Result<switch_log::SwitchStats, String> {
     Ok(state.switch_logger.get_stats())
 }
 
-/// 显示主窗口（供 tray popup 调用）
+/// Show main window (called by tray popup)
 #[tauri::command]
 fn show_main_window_cmd(app: tauri::AppHandle) {
     crate::tray::show_main_window_from_cmd(&app);
 }
 
-/// 杀死所有 codex 相关进程（排除 Codex Switcher 自身）
+/// Kill all codex processes (excluding Codex Switcher itself)
 #[tauri::command]
 fn kill_codex_processes() -> Result<String, String> {
     let script = r#"
@@ -1581,35 +1581,35 @@ fn kill_codex_processes() -> Result<String, String> {
         .arg("-c")
         .arg(script)
         .output()
-        .map_err(|e| format!("执行失败: {}", e))?;
+        .map_err(|e| format!("Execution failed: {}", e))?;
 
     let count = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let n: i32 = count.parse().unwrap_or(0);
 
     if n > 0 {
-        Ok(format!("已终止 {} 个 codex 进程", n))
+        Ok(format!("Terminated {} codex processes", n))
     } else {
-        Ok("未找到运行中的 codex 进程".to_string())
+        Ok("No running codex processes found".to_string())
     }
 }
 
-/// 设置 OPENAI_BASE_URL 环境变量（终端 + GUI 应用全覆盖）
+/// Set OPENAI_BASE_URL env var (terminal + GUI apps)
 #[tauri::command]
 fn set_proxy_env(port: u16, enable: bool) -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to resolve user directory")?;
     let env_value = format!("http://localhost:{}/v1", port);
     let env_line = format!("export OPENAI_BASE_URL={}", env_value);
     let marker = "# codex-switcher-proxy";
     let mut results = Vec::new();
 
-    // ── 1. 终端：写入 .zshrc / .bashrc ──
+    // ── 1. Terminal: write to .zshrc / .bashrc ──
     for rc_name in &[".zshrc", ".bashrc"] {
         let rc_path = home.join(rc_name);
         if !rc_path.exists() {
             continue;
         }
         let content = std::fs::read_to_string(&rc_path)
-            .map_err(|e| format!("读取 {} 失败: {}", rc_name, e))?;
+            .map_err(|e| format!("Failed to read {}: {}", rc_name, e))?;
 
         let cleaned: Vec<&str> = content
             .lines()
@@ -1625,11 +1625,11 @@ fn set_proxy_env(port: u16, enable: bool) -> Result<String, String> {
         }
 
         std::fs::write(&rc_path, &new_content)
-            .map_err(|e| format!("写入 {} 失败: {}", rc_name, e))?;
+            .map_err(|e| format!("Failed to write {}: {}", rc_name, e))?;
         results.push(rc_name.to_string());
     }
 
-    // ── 2. GUI 应用：launchctl setenv（Codex App 重启后生效）──
+    // ── 2. GUI apps: launchctl setenv (effective after Codex App restart) ──
     #[cfg(target_os = "macos")]
     {
         if enable {
@@ -1645,39 +1645,39 @@ fn set_proxy_env(port: u16, enable: bool) -> Result<String, String> {
         }
     }
 
-    // ── 3. Codex App config.toml：写入 openai_base_url ──
+    // ── 3. Codex App config.toml: write openai_base_url ──
     match set_codex_config_base_url(if enable { Some(&env_value) } else { None }) {
         Ok(_) => results.push("config.toml".to_string()),
-        Err(e) => results.push(format!("config.toml(失败: {})", e)),
+        Err(e) => results.push(format!("config.toml(failed: {})", e)),
     }
 
-    let status = if enable { "已设置" } else { "已移除" };
+    let status = if enable { "Set" } else { "Removed" };
     Ok(format!(
-        "{} OPENAI_BASE_URL ({})。\n终端：新窗口生效\nCodex App：重启后生效",
+        "{} OPENAI_BASE_URL ({}).\nTerminal: effective in new window\nCodex App: effective after restart",
         status,
         results.join(", ")
     ))
 }
 
-/// 读写 ~/.codex/config.toml 的 openai_base_url 字段
+/// Read/write openai_base_url field in ~/.codex/config.toml
 fn set_codex_config_base_url(url: Option<&str>) -> Result<(), String> {
     let config_path = dirs::home_dir()
-        .ok_or("无法获取用户目录")?
+        .ok_or("Failed to get user directory")?
         .join(".codex")
         .join("config.toml");
 
     if !config_path.exists() {
         if url.is_some() {
-            // 文件不存在，创建并写入
+            // File doesn't exist, create and write
             let content = format!("openai_base_url = \"{}\"\n", url.unwrap());
             std::fs::write(&config_path, content)
-                .map_err(|e| format!("创建 config.toml 失败: {}", e))?;
+                .map_err(|e| format!("Failed to create config.toml: {}", e))?;
         }
         return Ok(());
     }
 
     let content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取 config.toml 失败: {}", e))?;
+        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
 
     let mut new_lines: Vec<String> = Vec::new();
     let mut found = false;
@@ -1686,28 +1686,28 @@ fn set_codex_config_base_url(url: Option<&str>) -> Result<(), String> {
     for line in content.lines() {
         let trimmed = line.trim();
 
-        // 检测 [section] 开头，用于判断是否在顶层
+        // Detect [section] header to determine if at top level
         if trimmed.starts_with('[') {
             in_section = true;
         }
 
-        // 匹配顶层的 openai_base_url = "xxx"
+        // Match top-level openai_base_url = "xxx"
         if !in_section && trimmed.starts_with("openai_base_url") && trimmed.contains('=') {
             found = true;
             if let Some(u) = url {
                 new_lines.push(format!("openai_base_url = \"{}\"", u));
             }
-            // url 为 None 时跳过这行（移除）
+            // Skip this line when url is None (remove)
             continue;
         }
         new_lines.push(line.to_string());
     }
 
-    // 如果要设置但没找到已有行，在第一个 [section] 之前插入
+    // If setting but no existing line found, insert before first [section]
     if url.is_some() && !found {
         let u = url.unwrap();
         let insert_line = format!("openai_base_url = \"{}\"", u);
-        // 找到第一个 [section] 的位置
+        // Find position of first [section]
         let pos = new_lines.iter().position(|l| l.trim().starts_with('['));
         match pos {
             Some(idx) => new_lines.insert(idx, insert_line),
@@ -1716,63 +1716,63 @@ fn set_codex_config_base_url(url: Option<&str>) -> Result<(), String> {
     }
 
     std::fs::write(&config_path, new_lines.join("\n") + "\n")
-        .map_err(|e| format!("写入 config.toml 失败: {}", e))?;
+        .map_err(|e| format!("Failed to write config.toml: {}", e))?;
 
     Ok(())
 }
 
-/// 切换 Codex fast 模式（修改 config.toml 的 profile 字段）
+/// Toggle Codex fast mode (modify profile field in config.toml)
 #[tauri::command]
 fn set_codex_fast_mode(enable: bool) -> Result<String, String> {
     let config_path = dirs::home_dir()
-        .ok_or("无法获取用户目录")?
+        .ok_or("Failed to get user directory")?
         .join(".codex")
         .join("config.toml");
 
     if !config_path.exists() {
-        return Err("~/.codex/config.toml 不存在".to_string());
+        return Err("~/.codex/config.toml does not exist".to_string());
     }
 
     let content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("读取 config.toml 失败: {}", e))?;
+        .map_err(|e| format!("Failed to read config.toml: {}", e))?;
 
     let mut new_lines: Vec<String> = Vec::new();
     let mut found_profile = false;
 
     for line in content.lines() {
         let trimmed = line.trim();
-        // 匹配 profile = "xxx" 行（顶层，不在 [section] 下面的缩进行）
+        // Match profile = "xxx" line (top-level, not indented under [section])
         if trimmed.starts_with("profile") && trimmed.contains('=') && !trimmed.starts_with('[') {
             found_profile = true;
             if enable {
                 new_lines.push("profile = \"fast\"".to_string());
             }
-            // 不 enable 时跳过这行（移除 profile）
+            // Skip this line when not enable (remove profile)
             continue;
         }
         new_lines.push(line.to_string());
     }
 
-    // 如果 enable 但没找到 profile 行，在文件开头插入
+    // If enable but no profile line found, insert at file beginning
     if enable && !found_profile {
         new_lines.insert(0, "profile = \"fast\"".to_string());
     }
 
     std::fs::write(&config_path, new_lines.join("\n") + "\n")
-        .map_err(|e| format!("写入 config.toml 失败: {}", e))?;
+        .map_err(|e| format!("Failed to write config.toml: {}", e))?;
 
     if enable {
-        Ok("Fast 模式已开启（2x 额度消耗，更快推理）。重启 Codex 生效。".to_string())
+        Ok("Fast mode enabled (2x quota consumption, faster inference). Restart Codex to apply.".to_string())
     } else {
-        Ok("Fast 模式已关闭。重启 Codex 生效。".to_string())
+        Ok("Fast mode disabled. Restart Codex to apply.".to_string())
     }
 }
 
-/// 获取当前 fast 模式状态
+/// Get current fast mode status
 #[tauri::command]
 fn get_codex_fast_mode() -> Result<bool, String> {
     let config_path = dirs::home_dir()
-        .ok_or("无法获取用户目录")?
+        .ok_or("Failed to get user directory")?
         .join(".codex")
         .join("config.toml");
 
@@ -1780,7 +1780,7 @@ fn get_codex_fast_mode() -> Result<bool, String> {
         return Ok(false);
     }
 
-    let content = std::fs::read_to_string(&config_path).map_err(|e| format!("读取失败: {}", e))?;
+    let content = std::fs::read_to_string(&config_path).map_err(|e| format!("Read failed: {}", e))?;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -1800,7 +1800,7 @@ pub struct SyncStatus {
     pub current_id: Option<String>,
 }
 
-/// 检查 IDE 磁盘状态与内存状态的同步情况
+/// Check sync status between IDE disk state and memory state
 #[tauri::command]
 fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
     let disk_auth = match AccountStore::read_codex_auth() {
@@ -1819,8 +1819,8 @@ fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
     let store = state.store.lock().map_err(|e| e.to_string())?;
     let disk_email = AccountStore::extract_email(&disk_auth);
 
-    // 快速路径：先检查磁盘 auth 与当前激活账号是否身份一致
-    // 这解决了 JWT 过期/损坏导致 email 提取失败的误报问题
+    // Fast path: check if disk auth matches current active account identity
+    // This resolves false positives from JWT expiration/corruption causing email extraction failure
     let current_matches_disk = store
         .current
         .as_ref()
@@ -1844,7 +1844,7 @@ fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
         });
     }
 
-    // 慢路径：遍历所有账号匹配
+    // Slow path: iterate all accounts to match
     let matching_id = disk_email
         .as_deref()
         .and_then(|email| {
@@ -1882,15 +1882,15 @@ fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
     })
 }
 
-/// 强制将 Switcher 的激活指针对齐到磁盘账号
-/// 安全策略：只修改激活指针，绝不覆盖已有账号的 Token 数据
+/// Force align Switcher's active pointer to disk account
+/// Safety policy: only modify active pointer, never overwrite existing account Token data
 #[tauri::command]
 fn sync_active_with_disk(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
     let disk_auth = AccountStore::read_codex_auth()?;
     let disk_email = AccountStore::extract_email(&disk_auth);
     let mut store = state.store.lock().map_err(|e| e.to_string())?;
 
-    // 优先用 JWT Email 匹配（最可靠），其次才用 account_id
+    // Prefer JWT Email matching (most reliable), fallback to account_id
     let matching_id = disk_email
         .as_deref()
         .and_then(|email| {
@@ -1907,16 +1907,16 @@ fn sync_active_with_disk(state: State<AppState>, app: tauri::AppHandle) -> Resul
                 .map(|a| a.id.clone())
         })
         .or_else(|| {
-            // fallback: account_id 匹配
+            // fallback: account_id match
             store
                 .accounts
                 .values()
                 .find(|a| AccountStore::auth_identity_matches(&a.auth_json, &disk_auth))
                 .map(|a| a.id.clone())
         })
-        .ok_or_else(|| "磁盘账号不在管理列表中，请先导入".to_string())?;
+        .ok_or_else(|| "Disk account not in management list, please import first".to_string())?;
 
-    // 安全：只改指针，不覆盖 Token。避免封号 Token 污染好号。
+    // Safety: only change pointer, don't overwrite Token. Avoid banned Token contaminating good accounts.
     store.current = Some(matching_id);
     store.save()?;
 
@@ -1932,12 +1932,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState::new())
         .setup(|app| {
-            // 初始化系统托盘
+            // Initialize system tray
             if let Err(e) = tray::init(app.handle()) {
-                eprintln!("初始化托盘失败: {:?}", e);
+                eprintln!("Tray initialization failed: {:?}", e);
             }
 
-            // 启动后台调度器（仅在设置开启时）
+            // Start background scheduler (only when enabled in settings)
             let state = app.state::<AppState>();
             let should_start = state
                 .store
@@ -1949,10 +1949,10 @@ pub fn run() {
                 let mut scheduler_handle = state.scheduler.lock().unwrap();
                 *scheduler_handle = Some(handle);
             } else {
-                println!("[Scheduler] 后台刷新未开启，跳过启动");
+                println!("[Scheduler] Background refresh not enabled, skipping start");
             }
 
-            // 启动本地代理（仅在设置开启时）
+            // Start local proxy (only when enabled in settings)
             let (proxy_enabled, proxy_port, proxy_allow_lan) = state
                 .store
                 .lock()
@@ -1977,12 +1977,12 @@ pub fn run() {
                 );
                 let mut proxy_handle = state.proxy_handle.lock().unwrap();
                 *proxy_handle = Some(handle);
-                println!("[Proxy] 代理已随应用启动 (端口 {})", proxy_port);
+                println!("[Proxy] Proxy started with app (port {})", proxy_port);
             } else {
-                println!("[Proxy] 本地代理未开启，跳过启动");
+                println!("[Proxy] Local proxy not enabled, skipping start");
             }
 
-            // 启动定时额度刷新
+            // Start scheduled quota refresh
             let quota_refresh_enabled = state
                 .store
                 .lock()
@@ -1994,26 +1994,26 @@ pub fn run() {
                 *qr = Some(handle);
             }
 
-            // 初始化 Skills SSOT + 自动导入
+            // Initialize Skills SSOT + auto import
             if let Err(e) = skills::init_ssot() {
-                eprintln!("[Skills] SSOT 初始化失败: {}", e);
+                eprintln!("[Skills] SSOT initialization failed: {}", e);
             }
             {
                 let mut data = skills::SkillStore::load();
                 let count = skills::SkillStore::scan_existing(&mut data);
                 if count > 0 {
                     let _ = skills::SkillStore::save(&data);
-                    println!("[Skills] 自动导入 {} 个已有 skill", count);
+                    println!("[Skills] Auto imported {} existing skills", count);
                 }
             }
 
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 拦截关闭事件，改为隐藏窗口并从 Dock 隐藏
+            // Intercept close event, hide window and remove from Dock instead
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let _ = window.hide();
-                // macOS: 隐藏 Dock 图标，变成纯后台托盘应用
+                // macOS: hide Dock icon, become pure background tray app
                 #[cfg(target_os = "macos")]
                 {
                     let app = window.app_handle();
@@ -2162,6 +2162,6 @@ mod tests {
         let err = state
             .consume_quarantine_fix_ticket("expired")
             .expect_err("expired ticket should be rejected");
-        assert!(err.contains("过期"));
+        assert!(err.contains("expired"));
     }
 }

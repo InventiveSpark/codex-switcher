@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 use tokio::time::{Duration, Instant};
 use url::Url;
 
-/// 使用 OnceLock 代替 lazy_static 存储 OAuth 流程中的临时数据
+/// Use OnceLock instead of lazy_static to store OAuth flow temp data
 static PENDING_LOGIN: OnceLock<Mutex<Option<PendingLogin>>> = OnceLock::new();
 static CALLBACK_TASK: OnceLock<Mutex<Option<tokio::task::JoinHandle<()>>>> = OnceLock::new();
 
@@ -27,45 +27,45 @@ struct PendingLogin {
     port: u16,
 }
 
-/// 生成与官方一致的 state (Base64 编码的32字节随机数)
+/// Generate state matching official (Base64-encoded 32-byte random)
 fn generate_state() -> String {
     let mut bytes = [0u8; 32];
     rng().fill_bytes(&mut bytes);
     general_purpose::URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// 官方固定端口
+/// Official fixed port
 const DEFAULT_PORT: u16 = 1455;
 
-/// 准备 OAuth 流程并返回授权 URL
+/// Prepare OAuth flow and return auth URL
 #[tauri::command]
 pub async fn start_oauth_login(app_handle: AppHandle) -> Result<String, String> {
-    // 1. 如果有旧回调任务，先中止，避免同一进程重复占用固定端口
+    // 1. Abort old callback task to avoid port conflicts
     if let Ok(mut task_slot) = get_callback_task().lock() {
         if let Some(task) = task_slot.take() {
             task.abort();
         }
     }
 
-    // 等待端口从旧任务释放
+    // Wait for port release from old task
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     let listener = TcpListener::bind(format!("127.0.0.1:{}", DEFAULT_PORT))
         .await
         .map_err(|e| {
             format!(
-                "无法绑定本地端口 {}: {}。请关闭占用该端口的进程后重试。",
+                "Cannot bind to local port {}: {}. Close the process using this port and retry.",
                 DEFAULT_PORT, e
             )
         })?;
     let port = DEFAULT_PORT;
 
-    // 2. 生成 PKCE 和 State (与官方一致)
+    // 2. Generate PKCE and State (match official)
     let pkce = oauth::generate_pkce();
     let state = generate_state();
     let redirect_uri = format!("http://localhost:{}/auth/callback", port);
 
-    // 3. 构造授权 URL (与官方完全一致: 手动拼接, 不对特殊字符编码)
+    // 3. Build auth URL (exactly as official: manual concat, no special char encoding)
     let qs = format!(
         "response_type=code&client_id={}&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method=S256&id_token_add_organizations=true&codex_cli_simplified_flow=true&state={}&originator=codex_vscode",
         oauth::CLIENT_ID,
@@ -77,18 +77,18 @@ pub async fn start_oauth_login(app_handle: AppHandle) -> Result<String, String> 
 
     let auth_url = format!("{}?{}", oauth::AUTH_URL, qs);
 
-    // 4. 保存状态，开启监听任务
+    // 4. Save state, start listener task
     {
         let mut pending = get_pending_login()
             .lock()
-            .map_err(|_| "登录流程状态锁异常")?;
+            .map_err(|_| "Login flow state lock error")?;
         *pending = Some(PendingLogin {
             pkce: pkce.clone(),
             port,
         });
     }
 
-    // 5. 启动异步监听
+    // 5. Start async listener
     let app_handle_clone = app_handle.clone();
     let handle = tokio::spawn(async move {
         handle_callback(listener, app_handle_clone, state).await;
@@ -97,26 +97,26 @@ pub async fn start_oauth_login(app_handle: AppHandle) -> Result<String, String> 
         *task_slot = Some(handle);
     }
 
-    // 6. 打开浏览器
+    // 6. Open browser
     let _ = app_handle.opener().open_url(&auth_url, None::<String>);
 
     Ok(auth_url)
 }
 
-/// 监听回调
+/// Listen for callback
 async fn handle_callback(listener: TcpListener, app_handle: AppHandle, expected_state: String) {
     let deadline = Instant::now() + Duration::from_secs(180);
     loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            eprintln!("[OAuth] 回调监听超时，未收到有效授权码");
+            eprintln!("[OAuth] Callback listener timed out, no valid auth code received");
             return;
         }
 
         let accepted = match tokio::time::timeout(remaining, listener.accept()).await {
             Ok(result) => result,
             Err(_) => {
-                eprintln!("[OAuth] 回调监听超时，未收到有效授权码");
+                eprintln!("[OAuth] Callback listener timed out, no valid auth code received");
                 return;
             }
         };
@@ -124,7 +124,7 @@ async fn handle_callback(listener: TcpListener, app_handle: AppHandle, expected_
         let (mut socket, _) = match accepted {
             Ok(sock) => sock,
             Err(e) => {
-                eprintln!("[OAuth] 监听回调连接失败: {}", e);
+                eprintln!("[OAuth] Callback listener connection failed: {}", e);
                 continue;
             }
         };
@@ -133,7 +133,7 @@ async fn handle_callback(listener: TcpListener, app_handle: AppHandle, expected_
         let n = match socket.read(&mut buffer).await {
             Ok(n) => n,
             Err(e) => {
-                eprintln!("[OAuth] 读取回调请求失败: {}", e);
+                eprintln!("[OAuth] Failed to read callback request: {}", e);
                 continue;
             }
         };
@@ -143,19 +143,19 @@ async fn handle_callback(listener: TcpListener, app_handle: AppHandle, expected_
         let request = String::from_utf8_lossy(&buffer[..n]);
 
         if let Some(code) = extract_oauth_code_from_request(&request, &expected_state) {
-            // 发送成功 HTML 并通知前端
+            // Send success HTML and notify frontend
             let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\
-                <html><body><h1>授权成功</h1><p>已成功连接 OpenAI，你可以关闭此窗口并回到应用。</p>\
+                <html><body><h1>Authorization Successful</h1><p>Connected to OpenAI successfully. You may close this window and return to the app.</p>\
                 <script>setTimeout(() => window.close(), 3000)</script></body></html>";
             let _ = socket.write_all(response.as_bytes()).await;
 
             if let Err(e) = app_handle.emit("oauth-callback-received", code) {
-                eprintln!("发送 oauth-callback-received 事件失败: {}", e);
+                eprintln!("Failed to emit oauth-callback-received event: {}", e);
             }
             return;
         }
 
-        let response = "HTTP/1.1 400 Bad Request\r\n\r\n授权失败: State 校验不通过或参数缺失";
+        let response = "HTTP/1.1 400 Bad Request\r\n\r\nAuthorization failed: State verification failed or missing parameters";
         let _ = socket.write_all(response.as_bytes()).await;
     }
 }
@@ -180,13 +180,13 @@ fn extract_oauth_code_from_request(request: &str, expected_state: &str) -> Optio
     Some(code.to_string())
 }
 
-/// 最后一步：使用捕获到的 Code 交换 Token (由前端触发)
+/// Final step: exchange captured Code for Token (triggered by frontend)
 #[tauri::command]
 pub async fn complete_oauth_login(code: String) -> Result<oauth::TokenResponse, String> {
-    // 提取所需数据并立即释放锁，避免跨 await 持有 MutexGuard
+    // Extract data and immediately release lock to avoid holding MutexGuard across await
     let (code_verifier, port) = {
-        let mut pending_lock = get_pending_login().lock().map_err(|_| "锁被污染")?;
-        let pending = pending_lock.take().ok_or("登录流程已过期或未启动")?;
+        let mut pending_lock = get_pending_login().lock().map_err(|_| "Lock poisoned")?;
+        let pending = pending_lock.take().ok_or("Login flow expired or not started")?;
         (pending.pkce.code_verifier, pending.port)
     };
 

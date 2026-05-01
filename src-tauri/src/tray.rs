@@ -5,12 +5,12 @@ use tauri::{
     AppHandle, Manager,
 };
 
-/// 初始化系统托盘
+/// Initialize system tray
 pub fn init(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    // 加载并缩放图标
+    // Load and scale icon
     let icon_bytes = include_bytes!("../icons/app-icon-squircle.png");
     let base_img =
-        image::load_from_memory(icon_bytes).map_err(|e| format!("加载图标失败: {}", e))?;
+        image::load_from_memory(icon_bytes).map_err(|e| format!("Failed to load icon: {}", e))?;
 
     let target_size = 128;
     let content_size = 105;
@@ -44,34 +44,34 @@ pub fn init(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 ..
             } = event
             {
-                // 任意点击 → 弹出 popup
+                // Any click → show popup
                 toggle_popup(tray.app_handle(), position);
             }
         })
         .build(app)?;
 
-    println!("[Tray] 系统托盘已启动");
+    println!("[Tray] System tray started");
     Ok(())
 }
 
-/// 显示/隐藏 tray popup 窗口
+/// Show/hide tray popup window
 fn toggle_popup(app: &AppHandle, position: tauri::PhysicalPosition<f64>) {
     let label = "tray-popup";
 
-    // 如果已存在，切换显示/隐藏
+    // If exists, toggle show/hide
     if let Some(win) = app.get_webview_window(label) {
         if win.is_visible().unwrap_or(false) {
             let _ = win.hide();
             return;
         }
-        // 重新定位并显示
+        // Reposition and show
         let _ = position_popup(&win, position);
         let _ = win.show();
         let _ = win.set_focus();
         return;
     }
 
-    // 首次创建
+    // First time creation
     let popup_width = 380.0;
     let popup_height = 410.0;
 
@@ -90,7 +90,7 @@ fn toggle_popup(app: &AppHandle, position: tauri::PhysicalPosition<f64>) {
         .build()
     {
         Ok(win) => {
-            // 监听焦点丢失 → 自动隐藏
+            // Listen for focus loss → auto hide
             let win_clone = win.clone();
             win.on_window_event(move |event| {
                 if let tauri::WindowEvent::Focused(false) = event {
@@ -102,11 +102,11 @@ fn toggle_popup(app: &AppHandle, position: tauri::PhysicalPosition<f64>) {
             let _ = win.show();
             let _ = win.set_focus();
         }
-        Err(e) => eprintln!("[Tray] 创建 popup 窗口失败: {}", e),
+        Err(e) => eprintln!("[Tray] Failed to create popup window: {}", e),
     }
 }
 
-/// 将 popup 窗口定位到托盘图标附近（macOS 顶部菜单栏下方）
+/// Position popup window near tray icon (below macOS top menu bar)
 fn position_popup(
     win: &tauri::WebviewWindow,
     tray_pos: tauri::PhysicalPosition<f64>,
@@ -116,7 +116,7 @@ fn position_popup(
     let scale = win.scale_factor().unwrap_or(1.0);
 
     let x = (tray_pos.x - popup_width * scale / 2.0).max(0.0) as i32;
-    let y = (tray_pos.y + 4.0) as i32; // 留一点间距给菜单栏
+    let y = (tray_pos.y + 4.0) as i32; // Leave some spacing for menu bar
 
     let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
         x, y,
@@ -135,16 +135,16 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// 供 Tauri command 调用的入口
+/// Entry point for Tauri command invocation
 pub fn show_main_window_from_cmd(app: &AppHandle) {
     show_main_window(app);
-    // 同时隐藏 popup
+    // Also hide popup
     if let Some(popup) = app.get_webview_window("tray-popup") {
         let _ = popup.hide();
     }
 }
 
-/// 更新托盘 tooltip（不再需要完整菜单）
+/// Update tray tooltip (no longer needs full menu)
 pub fn update_tray_menu(app: &AppHandle) {
     let state = app.state::<crate::AppState>();
     let store = match state.store.lock() {
@@ -157,14 +157,14 @@ pub fn update_tray_menu(app: &AppHandle) {
             let quota = acc
                 .cached_quota
                 .as_ref()
-                .map(|q| format!(" | 5H: {:.0}%  周: {:.0}%", q.five_hour_left, q.weekly_left))
+                .map(|q| format!(" | 5H: {:.0}%  Wk: {:.0}%", q.five_hour_left, q.weekly_left))
                 .unwrap_or_default();
             format!("Codex Switcher - {}{}", acc.name, quota)
         } else {
             "Codex Switcher".to_string()
         }
     } else {
-        "Codex Switcher - 未登录".to_string()
+        "Codex Switcher - Not signed in".to_string()
     };
 
     if let Some(tray) = app.tray_by_id("main") {

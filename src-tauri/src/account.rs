@@ -1,6 +1,6 @@
-//! Codex Switcher - 账号管理模块
+//! Codex Switcher - Account Management Module
 //!
-//! 处理多个 Codex 账号的存储、切换和管理
+//! Handle storage, switching, and management of multiple Codex accounts
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,82 +9,82 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// 应用全局设置
+/// App global settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
-    /// 是否在切换账号后自动重载 IDE
+    /// Auto-reload IDE after switch
     #[serde(default)]
     pub auto_reload_ide: bool,
 
-    /// 主力 IDE: "Windsurf" | "Antigravity" | "Cursor" | "VSCode"
+    /// Primary IDE: "Windsurf" | "Antigravity" | "Cursor" | "VSCode"
     #[serde(default = "default_primary_ide")]
     pub primary_ide: String,
 
-    /// 是否使用杀进程方式重启（Windsurf 推荐）
+    /// Force restart via process termination (recommended for Windsurf)
     #[serde(default)]
     pub use_pkill_restart: bool,
 
-    /// 后台自动刷新 Token
+    /// Background auto-refresh Token
     #[serde(default = "default_false")]
     pub background_refresh: bool,
 
-    /// 刷新间隔（分钟）
+    /// Refresh interval (minutes)
     #[serde(default = "default_refresh_interval")]
     pub refresh_interval_minutes: u32,
 
-    /// 非活跃账号在距离失效前多少天开始保活刷新
+    /// Days before expiration to start keepalive refresh for inactive accounts
     #[serde(default = "default_inactive_refresh_days")]
     pub inactive_refresh_days: u32,
 
-    /// 界面配色方案
+    /// UI theme palette
     #[serde(default = "default_theme_palette")]
     pub theme_palette: String,
 
-    /// 是否允许智能切号自动切换到免费账号
+    /// Allow smart switch to auto-switch to free-tier accounts
     #[serde(default = "default_false")]
     pub allow_auto_switch_to_free: bool,
 
-    /// 是否启用本地代理服务器
+    /// Enable local proxy server
     #[serde(default = "default_false")]
     pub proxy_enabled: bool,
 
-    /// 代理服务器端口
+    /// Proxy server port
     #[serde(default = "default_proxy_port")]
     pub proxy_port: u16,
 
-    /// 允许局域网设备访问代理
+    /// Allow LAN devices to access proxy
     #[serde(default)]
     pub proxy_allow_lan: bool,
 
-    /// 5h 配额预防性切号阈值（0=仅429触发，10=剩余<10%时切）
+    /// 5H quota preemptive switch threshold (0=only on 429, 10=switch when <10% remaining)
     #[serde(default)]
     pub proxy_threshold_5h: u8,
 
-    /// 周配额预防性切号阈值（0=仅429触发，5=剩余<5%时切）
+    /// Weekly quota preemptive switch threshold (0=only on 429, 5=switch when <5% remaining)
     #[serde(default)]
     pub proxy_threshold_weekly: u8,
 
-    /// Free 账号保护线（0=不特殊处理，35=剩余<35%时切）
+    /// Free-tier guard threshold (0=no special handling, 35=switch when <35% remaining)
     #[serde(default)]
     pub proxy_free_guard: u8,
 
-    /// 切号时发送 macOS 系统通知
+    /// Send macOS system notification on switch
     #[serde(default)]
     pub notify_on_switch: bool,
 
-    /// 切号时注入消息到 Codex 对话（实验性）
+    /// Inject message into Codex conversation on switch (experimental)
     #[serde(default)]
     pub inject_switch_message: bool,
 
-    /// 定时刷新账号额度
+    /// Scheduled quota refresh for accounts
     #[serde(default)]
     pub quota_refresh_enabled: bool,
 
-    /// 每个账号刷新间隔（分钟）
+    /// Per-account refresh interval (minutes)
     #[serde(default = "default_quota_refresh_interval")]
     pub quota_refresh_interval: u32,
 
-    /// 每轮刷新几个账号
+    /// Accounts to refresh per batch
     #[serde(default = "default_quota_refresh_batch")]
     pub quota_refresh_batch: u32,
 }
@@ -147,56 +147,56 @@ impl Default for AppSettings {
     }
 }
 
-/// 单个账号信息
+/// Account info
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
-    /// 唯一标识符
+    /// Unique identifier
     pub id: String,
-    /// 账号名称（用户自定义）
+    /// Display name (user-defined)
     pub name: String,
-    /// auth.json 内容
+    /// auth.json content
     pub auth_json: serde_json::Value,
-    /// OpenAI refresh_token (用于生成新的 auth_json)
+    /// OpenAI refresh_token (for generating new auth_json)
     pub refresh_token: Option<String>,
-    /// 创建时间
+    /// Created at
     pub created_at: DateTime<Utc>,
-    /// 上次使用时间
+    /// Last used
     pub last_used: Option<DateTime<Utc>>,
-    /// 备注
+    /// Notes
     pub notes: Option<String>,
-    /// 缓存的配额信息
+    /// Cached quota
     #[serde(default)]
     pub cached_quota: Option<CachedQuota>,
 
-    /// 非活跃账号保活状态
+    /// Inactive keepalive status
     #[serde(default)]
     pub keepalive: KeepaliveState,
 
-    /// 该账号是否已被 OpenAI 封禁
+    /// Banned by OpenAI
     #[serde(default)]
     pub is_banned: bool,
 
-    /// 该账号授权是否已失效（需重新登录）
+    /// Authorization expired (requires re-login)
     #[serde(default)]
     pub is_token_invalid: bool,
 
-    /// 该账号是否已登出
+    /// Signed out
     #[serde(default)]
     pub is_logged_out: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeepaliveState {
-    /// 是否允许调度器为该账号执行“非活跃保活刷新”
+    /// Allow scheduler to execute background keepalive refresh for this account
     #[serde(default = "default_true")]
     pub inactive_refresh_enabled: bool,
-    /// 最近一次保活尝试时间
+    /// Last keepalive attempt time
     #[serde(default)]
     pub last_attempt_at: Option<DateTime<Utc>>,
-    /// 最近一次保活成功时间
+    /// Last keepalive success time
     #[serde(default)]
     pub last_success_at: Option<DateTime<Utc>>,
-    /// 最近一次保活错误
+    /// Last keepalive error
     #[serde(default)]
     pub last_error: Option<String>,
 }
@@ -212,7 +212,7 @@ impl Default for KeepaliveState {
     }
 }
 
-/// 缓存的配额信息
+/// Cached quota info
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedQuota {
     pub five_hour_left: f64,
@@ -232,27 +232,27 @@ pub struct CachedQuota {
 }
 
 fn default_five_hour_label() -> String {
-    "5H 限额".to_string()
+    "5-Hour Quota".to_string()
 }
 
 fn default_weekly_label() -> String {
-    "周限额".to_string()
+    "Weekly Quota".to_string()
 }
 
 fn default_true() -> bool {
     true
 }
 
-/// 账号存储结构
+/// Account store structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AccountStore {
-    /// 所有账号
+    /// All accounts
     pub accounts: HashMap<String, Account>,
-    /// 当前激活的账号 ID
+    /// Currently active account ID
     pub current: Option<String>,
-    /// 版本号（用于迁移）
+    /// Version number (for migrations)
     pub version: u32,
-    /// 全局设置
+    /// Global settings
     #[serde(default)]
     pub settings: AppSettings,
 }
@@ -261,7 +261,7 @@ pub struct AccountStore {
 fn ensure_private_file_permissions(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let perms = fs::Permissions::from_mode(0o600);
-    fs::set_permissions(path, perms).map_err(|e| format!("设置文件权限失败: {}", e))
+    fs::set_permissions(path, perms).map_err(|e| format!("Failed to set file permissions: {}", e))
 }
 
 #[cfg(not(unix))]
@@ -273,7 +273,7 @@ fn ensure_private_file_permissions(_path: &Path) -> Result<(), String> {
 fn ensure_private_dir_permissions(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let perms = fs::Permissions::from_mode(0o700);
-    fs::set_permissions(path, perms).map_err(|e| format!("设置目录权限失败: {}", e))
+    fs::set_permissions(path, perms).map_err(|e| format!("Failed to set directory permissions: {}", e))
 }
 
 #[cfg(not(unix))]
@@ -282,29 +282,29 @@ fn ensure_private_dir_permissions(_path: &Path) -> Result<(), String> {
 }
 
 fn write_text_secure(path: &Path, content: &str) -> Result<(), String> {
-    fs::write(path, content).map_err(|e| format!("写入文件失败: {}", e))?;
+    fs::write(path, content).map_err(|e| format!("Failed to write file: {}", e))?;
     ensure_private_file_permissions(path)?;
     Ok(())
 }
 
 impl AccountStore {
-    /// 配置文件路径
+    /// Config file path
     pub fn config_path() -> PathBuf {
         dirs::home_dir()
-            .expect("无法获取用户目录")
+            .expect("Unable to resolve user directory")
             .join(".codex-switcher")
             .join("accounts.json")
     }
 
-    /// Codex auth.json 路径
+    /// Codex auth.json path
     pub fn codex_auth_path() -> PathBuf {
         dirs::home_dir()
-            .expect("无法获取用户目录")
+            .expect("Unable to resolve user directory")
             .join(".codex")
             .join("auth.json")
     }
 
-    /// 加载账号存储
+    /// Load account store
     pub fn load() -> Self {
         let path = Self::config_path();
         let mut store = if path.exists() {
@@ -312,7 +312,7 @@ impl AccountStore {
             match serde_json::from_str::<Self>(&content) {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("[AccountStore] 关键错误：无法解析 accounts.json ({}). \n内容可能损坏，为保护数据已回退到内存状态。错误内容：{}", path.display(), e);
+                    eprintln!("[AccountStore] Critical: Failed to parse accounts.json ({}). \nData may be corrupted; reverted to in-memory state. Error: {}", path.display(), e);
                     Self::default()
                 }
             }
@@ -327,63 +327,63 @@ impl AccountStore {
         store
     }
 
-    /// 保存账号存储
+    /// Save account store
     pub fn save(&self) -> Result<(), String> {
         let path = Self::config_path();
 
-        // 确保目录存在
+        // Ensure directory exists
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
             ensure_private_dir_permissions(parent)?;
         }
 
         let content =
-            serde_json::to_string_pretty(self).map_err(|e| format!("序列化失败: {}", e))?;
+            serde_json::to_string_pretty(self).map_err(|e| format!("Serialization failed: {}", e))?;
 
         write_text_secure(&path, &content)?;
 
         Ok(())
     }
 
-    /// 读取当前 Codex auth.json
+    /// Read current Codex auth.json
     pub fn read_codex_auth() -> Result<serde_json::Value, String> {
         let path = Self::codex_auth_path();
         if !path.exists() {
-            return Err("未找到 Codex auth.json，请先登录 Codex".to_string());
+            return Err("Codex auth.json not found. Please sign in to Codex first".to_string());
         }
 
         let content =
-            fs::read_to_string(&path).map_err(|e| format!("读取 auth.json 失败: {}", e))?;
+            fs::read_to_string(&path).map_err(|e| format!("Failed to read auth.json: {}", e))?;
 
-        serde_json::from_str(&content).map_err(|e| format!("解析 auth.json 失败: {}", e))
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse auth.json: {}", e))
     }
 
-    /// 写入 Codex auth.json
+    /// Write Codex auth.json
     pub fn write_codex_auth(auth: &serde_json::Value) -> Result<(), String> {
         let path = Self::codex_auth_path();
-        println!("写入 auth.json 到路径: {:?}", path);
+        println!("Writing auth.json to path: {:?}", path);
 
-        // 确保目录存在
+        // Ensure directory exists
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
             ensure_private_dir_permissions(parent)?;
         }
 
         let content =
-            serde_json::to_string_pretty(auth).map_err(|e| format!("序列化失败: {}", e))?;
+            serde_json::to_string_pretty(auth).map_err(|e| format!("Serialization failed: {}", e))?;
 
-        // 原子写入：先写临时文件，再重命名
+        // Atomic write: write to temp file first, then rename
         let tmp_path = path.with_extension("tmp");
-        write_text_secure(&tmp_path, &content).map_err(|e| format!("写入临时文件失败: {}", e))?;
+        write_text_secure(&tmp_path, &content).map_err(|e| format!("Failed to write temp file: {}", e))?;
 
         fs::rename(&tmp_path, &path)
-            .map_err(|e| format!("重命名文件失败 (Atomic Write): {}", e))?;
+            .map_err(|e| format!("Atomic write failed (rename): {}", e))?;
         ensure_private_file_permissions(&path)?;
 
         Ok(())
     }
 
-    /// 添加新账号
+    /// Add new account
     pub fn add_account(
         &mut self,
         name: String,
@@ -396,7 +396,7 @@ impl AccountStore {
             id: id.clone(),
             name,
             auth_json,
-            refresh_token, // 从 auth_json 尝试提取
+            refresh_token, // Try to extract from auth_json
             created_at: Utc::now(),
             last_used: None,
             notes,
@@ -409,7 +409,7 @@ impl AccountStore {
 
         self.accounts.insert(id.clone(), account.clone());
 
-        // 如果是第一个账号，设为当前
+        // Set as active if first account
         if self.current.is_none() {
             self.current = Some(id);
         }
@@ -417,39 +417,39 @@ impl AccountStore {
         account
     }
 
-    /// 切换到指定账号
+    /// Switch to specified account
     pub fn switch_to(&mut self, id: &str) -> Result<(), String> {
         let account = self
             .accounts
             .get_mut(id)
-            .ok_or_else(|| format!("账号不存在: {}", id))?;
+            .ok_or_else(|| format!("Account not found: {}", id))?;
 
-        // 对齐 Codex：切换时不主动刷新 refresh_token，直接写入目标账号 auth.json。
-        // 后续 token 生命周期由 Codex 自己在真实请求中按需维护。
+        // Align with Codex: skip proactive refresh_token refresh on switch, write target account auth.json directly.
+        // Token lifecycle is maintained by Codex itself on actual requests.
 
-        // 更新最后使用时间
+        // Update last used
         account.last_used = Some(Utc::now());
 
-        // 写入 auth.json
-        println!("正在切换账号: {}", id);
+        // Write auth.json
+        println!("Switching account: {}", id);
         Self::write_codex_auth(&account.auth_json)?;
-        println!("账号切换成功: auth.json 已更新");
+        println!("Switch successful: auth.json updated");
 
-        // 更新当前账号
+        // Update current account
         self.current = Some(id.to_string());
 
         Ok(())
     }
 
-    /// 删除账号
+    /// Delete account
     pub fn delete_account(&mut self, id: &str) -> Result<(), String> {
         if !self.accounts.contains_key(id) {
-            return Err(format!("账号不存在: {}", id));
+            return Err(format!("Account not found: {}", id));
         }
 
         self.accounts.remove(id);
 
-        // 如果删除的是当前账号，清空 current
+        // Clear active state if deleting current account
         if self.current.as_deref() == Some(id) {
             self.current = self.accounts.keys().next().cloned();
         }
@@ -457,7 +457,7 @@ impl AccountStore {
         Ok(())
     }
 
-    /// 更新账号信息
+    /// Update account info
     pub fn update_account(
         &mut self,
         id: &str,
@@ -467,7 +467,7 @@ impl AccountStore {
         let account = self
             .accounts
             .get_mut(id)
-            .ok_or_else(|| format!("账号不存在: {}", id))?;
+            .ok_or_else(|| format!("Account not found: {}", id))?;
 
         if let Some(n) = name {
             account.name = n;
@@ -479,35 +479,35 @@ impl AccountStore {
         Ok(())
     }
 
-    /// 设置某账号是否允许“非活跃保活刷新”
+    /// Toggle background keepalive for inactive accounts
     pub fn set_inactive_refresh_enabled(&mut self, id: &str, enabled: bool) -> Result<(), String> {
         let account = self
             .accounts
             .get_mut(id)
-            .ok_or_else(|| format!("账号不存在: {}", id))?;
+            .ok_or_else(|| format!("Account not found: {}", id))?;
         account.keepalive.inactive_refresh_enabled = enabled;
         Ok(())
     }
 
-    /// 获取所有账号列表
+    /// Get all accounts list
     pub fn list_accounts(&self) -> Vec<&Account> {
         let mut accounts: Vec<_> = self.accounts.values().collect();
         accounts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         accounts
     }
 
-    /// 导出配置
+    /// Export config
     pub fn export(&self) -> Result<String, String> {
-        serde_json::to_string_pretty(self).map_err(|e| format!("导出失败: {}", e))
+        serde_json::to_string_pretty(self).map_err(|e| format!("Export failed: {}", e))
     }
 
-    /// 导入配置
+    /// Import config
     pub fn import(json: &str) -> Result<Self, String> {
-        let mut store: Self = serde_json::from_str(json).map_err(|e| format!("导入失败: {}", e))?;
+        let mut store: Self = serde_json::from_str(json).map_err(|e| format!("Import failed: {}", e))?;
         store.backfill_refresh_tokens();
         Ok(store)
     }
-    /// 从 auth_json 中提取 refresh_token（兼容 tokens.refresh_token 或根级 refresh_token）
+    /// Extract refresh_token from auth_json (compatible with tokens.refresh_token or root-level refresh_token)
     pub fn extract_refresh_token(auth_json: &Value) -> Option<String> {
         auth_json
             .get("tokens")
@@ -519,15 +519,15 @@ impl AccountStore {
             .map(|s| s.to_string())
     }
 
-    /// 从 auth_json 中提取 access_token
+    /// Extract access_token from auth_json
     pub fn extract_access_token(auth_json: &Value) -> Option<String> {
-        // 优先从 tokens 对象取
+        // Prefer extracting from tokens object
         let from_tokens = auth_json.get("tokens").and_then(|t| {
-            // tokens 可能是对象或字符串（历史数据兼容）
+            // tokens may be object or string (backward compatibility)
             if t.is_object() {
                 t.get("access_token").and_then(|v| v.as_str())
             } else if let Some(s) = t.as_str() {
-                // tokens 被存为 Python repr 字符串，尝试提取
+                // tokens stored as Python repr string, try to extract
                 extract_token_from_str(s, "access_token")
             } else {
                 None
@@ -542,8 +542,8 @@ impl AccountStore {
     }
 }
 
-/// 从 Python repr 格式的字符串中提取 token 值
-/// 如: "{'access_token': 'eyJ...', 'refresh_token': '...'}"
+/// Extract token value from Python repr format string
+/// e.g.: "{'access_token': 'eyJ...', 'refresh_token': '...'}"
 fn extract_token_from_str<'a>(s: &'a str, key: &str) -> Option<&'a str> {
     let pattern = format!("'{}': '", key);
     if let Some(start) = s.find(&pattern) {
@@ -556,7 +556,7 @@ fn extract_token_from_str<'a>(s: &'a str, key: &str) -> Option<&'a str> {
 }
 
 impl AccountStore {
-    /// 从 auth_json 中提取 account_id
+    /// Extract account_id from auth_json
     pub fn extract_account_id(auth_json: &Value) -> Option<String> {
         auth_json
             .get("tokens")
@@ -567,7 +567,7 @@ impl AccountStore {
             .map(|s| s.to_string())
     }
 
-    /// 账号身份是否一致（优先 account_id，其次 openai user id）
+    /// Check if account identities match (account_id first, then openai user id)
     pub fn auth_identity_matches(local_auth: &Value, external_auth: &Value) -> bool {
         let local_account_id = Self::extract_account_id(local_auth);
         let external_account_id = Self::extract_account_id(external_auth);
@@ -613,11 +613,11 @@ impl AccountStore {
         serde_json::from_str(&json_str).ok()
     }
 
-    /// 从原始 Token 字符串提取 JWT Claims
+    /// Extract JWT Claims from raw token string
     pub fn extract_jwt_claims_from_token(token: &str) -> Result<Value, String> {
         let parts: Vec<&str> = token.split('.').collect();
         if parts.len() != 3 {
-            return Err("无效的 Token 格式".to_string());
+            return Err("Invalid token format".to_string());
         }
 
         use base64::Engine;
@@ -630,12 +630,12 @@ impl AccountStore {
         let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(payload_part)
             .or_else(|_| base64::engine::general_purpose::STANDARD.decode(&padded))
-            .map_err(|e| format!("Base64 解码失败: {}", e))?;
-        let json_str = String::from_utf8(decoded).map_err(|e| format!("UTF-8 转换失败: {}", e))?;
-        serde_json::from_str(&json_str).map_err(|e| format!("JSON 解析失败: {}", e))
+            .map_err(|e| format!("Base64 decode failed: {}", e))?;
+        let json_str = String::from_utf8(decoded).map_err(|e| format!("UTF-8 conversion failed: {}", e))?;
+        serde_json::from_str(&json_str).map_err(|e| format!("JSON parse failed: {}", e))
     }
 
-    /// 从 auth_json 中提取邮箱（优先 id_token claims）
+    /// Extract email from auth_json (prefer id_token claims)
     pub fn extract_email(auth_json: &Value) -> Option<String> {
         let claims = Self::extract_jwt_claims_from_auth(auth_json, "id_token")
             .or_else(|| Self::extract_jwt_claims_from_auth(auth_json, "access_token"))?;
@@ -654,7 +654,7 @@ impl AccountStore {
             .map(|s| s.to_string())
     }
 
-    /// 从 auth_json 中提取 last_refresh（RFC3339 或时间戳）
+    /// Extract last_refresh from auth_json (RFC3339 or timestamp)
     pub fn extract_last_refresh(auth_json: &Value) -> Option<DateTime<Utc>> {
         let raw = auth_json.get("last_refresh")?;
         if let Some(s) = raw.as_str() {
@@ -673,12 +673,12 @@ impl AccountStore {
         None
     }
 
-    /// 是否需要按间隔触发本地刷新（已停用，统一交由 Codex 按需维护）
+    /// Whether to trigger local refresh by interval (deprecated, handled by Codex on demand)
     pub fn needs_refresh_by_interval(_auth_json: &Value) -> bool {
         false
     }
 
-    /// 为缺失 refresh_token 的账号做一次回填
+    /// Backfill missing refresh_token for accounts
     fn backfill_refresh_tokens(&mut self) -> bool {
         let mut changed = false;
         for account in self.accounts.values_mut() {
@@ -701,7 +701,7 @@ impl AccountStore {
         changed
     }
 
-    /// 列出缺失 refresh_token 的账号（用于导入校验）
+    /// List accounts missing refresh_token (for import validation)
     pub fn accounts_missing_refresh_token(&self) -> Vec<String> {
         self.accounts
             .values()
@@ -718,7 +718,7 @@ impl AccountStore {
             .collect()
     }
 
-    /// 记录保活刷新尝试结果（失败）
+    /// Record keepalive refresh attempt result (failure)
     pub fn mark_keepalive_attempt_failed(&mut self, id: &str, reason: String) {
         if let Some(account) = self.accounts.get_mut(id) {
             account.keepalive.last_attempt_at = Some(Utc::now());
@@ -726,7 +726,7 @@ impl AccountStore {
         }
     }
 
-    /// 记录保活刷新成功
+    /// Record keepalive refresh success
     pub fn mark_keepalive_attempt_success(&mut self, id: &str) {
         if let Some(account) = self.accounts.get_mut(id) {
             let now = Utc::now();
@@ -736,7 +736,7 @@ impl AccountStore {
         }
     }
 
-    /// 对非当前账号：是否应触发保活刷新
+    /// For non-current accounts: whether to trigger keepalive refresh
     pub fn should_refresh_inactive_account(account: &Account, inactive_refresh_days: u32) -> bool {
         if !account.keepalive.inactive_refresh_enabled {
             return false;
@@ -748,7 +748,7 @@ impl AccountStore {
         }
     }
 
-    /// 应用 refresh token 成功返回的新令牌（原子更新账号结构）
+    /// Apply new tokens from successful refresh (atomic update to account structure)
     pub fn apply_refreshed_tokens(
         account: &mut Account,
         access_token: String,
@@ -759,7 +759,7 @@ impl AccountStore {
         let now = Utc::now();
 
         if let Some(obj) = account.auth_json.as_object_mut() {
-            // 如果 tokens 不存在或不是对象（如被存为字符串），重建为空对象
+            // If tokens doesn't exist or isn't an object (e.g. stored as string), rebuild as empty object
             let needs_reset = obj.get("tokens").map(|v| !v.is_object()).unwrap_or(true);
             if needs_reset {
                 obj.insert("tokens".to_string(), serde_json::json!({}));
@@ -799,8 +799,8 @@ impl AccountStore {
         }
     }
 
-    /// 使用提供的 auth.json 同步指定账号
-    /// 返回是否发生了更新
+    /// Sync specified account using provided auth.json
+    /// Returns whether an update occurred
     pub fn sync_account_from_auth_json(&mut self, id: &str, auth_json: Value) -> bool {
         if let Some(account) = self.accounts.get_mut(id) {
             return Self::sync_account_from_auth_json_inner(account, auth_json);
@@ -809,7 +809,7 @@ impl AccountStore {
     }
 
     fn sync_account_from_auth_json_inner(account: &mut Account, auth_json: Value) -> bool {
-        // 安全检查：必须满足“身份一致（account_id/uid）”
+        // Safety check: must satisfy "identity match (account_id/uid)"
         let local_account_id = Self::extract_account_id(&account.auth_json);
         let external_account_id = Self::extract_account_id(&auth_json);
         let local_uid = Self::extract_openai_user_id(&account.auth_json);
@@ -817,7 +817,7 @@ impl AccountStore {
 
         if !Self::auth_identity_matches(&account.auth_json, &auth_json) {
             eprintln!(
-                "拒绝同步：身份不匹配 (外部 account_id: {:?}, 本地 account_id: {:?}, 外部 uid: {:?}, 本地 uid: {:?})",
+                "Sync rejected: identity mismatch (external account_id: {:?}, local account_id: {:?}, external uid: {:?}, local uid: {:?})",
                 external_account_id, local_account_id, external_uid, local_uid
             );
             return false;
@@ -829,7 +829,7 @@ impl AccountStore {
             if let Some(email) = external_email {
                 if email != local_name {
                     eprintln!(
-                        "拒绝同步：账号名与 token 邮箱不一致 (name: {:?}, token email: {:?})",
+                        "Sync rejected: account name doesn't match token email (name: {:?}, token email: {:?})",
                         account.name, email
                     );
                     return false;
@@ -876,14 +876,14 @@ impl AccountStore {
     pub fn extract_openai_user_id(auth_json: &Value) -> Option<String> {
         let claims = Self::extract_jwt_claims_from_auth(auth_json, "access_token")?;
 
-        // 1. 尝试特定的 profile 嵌套路径 (从 cat 输出看有这种结构)
+        // 1. Try specific profile nested path (seen in cat output)
         if let Some(profile) = claims.get("https://api.openai.com/profile") {
             if let Some(uid) = profile.get("user_id").and_then(|v| v.as_str()) {
                 return Some(uid.to_string());
             }
         }
 
-        // 2. 尝试常见 claim
+        // 2. Try common claims
         claims
             .get("https://api.openai.com/auth/user_id")
             .and_then(|v| v.as_str())
@@ -922,7 +922,7 @@ mod tests {
     fn test_add_account() {
         let mut store = AccountStore::default();
         let account = store.add_account(
-            "测试账号".to_string(),
+            "Test Account".to_string(),
             serde_json::json!({"token": "test"}),
             None,
         );

@@ -7,7 +7,7 @@ interface AddAccountModalProps {
     isOpen: boolean;
     onClose: () => void;
     onAdd: (name: string, notes?: string) => Promise<void>;
-    onSuccess?: () => void;  // 添加成功后的回调，用于刷新父组件列表
+    onSuccess?: () => void;  // Callback after successful addition, used to refresh parent list
 }
 
 type TabType = 'official' | 'openai';
@@ -21,20 +21,20 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
     const [error, setError] = useState<string | null>(null);
     const [oauthStatus, setOauthStatus] = useState<string>('');
 
-    // 监听后端发来的授权码
+    // Listen for authorization code from backend
     useEffect(() => {
         if (!isOpen) return;
 
         const unlisten = listen<string>('oauth-callback-received', async (event) => {
             const code = event.payload;
-            setOauthStatus('已获取授权码，正在交换令牌...');
+            setOauthStatus('Authorization code received, exchanging for token...');
             try {
                 await finalizeOAuthLogin(code);
-                setOauthStatus('授权成功！账号已添加。');
+                setOauthStatus('Authorization successful! Account added.');
                 setLoading(false);
-                // 延迟关闭模态框，让用户看到成功提示
+                // Delay closing modal to show success message
                 setTimeout(() => {
-                    onSuccess?.();  // 通知父组件刷新列表
+                    onSuccess?.();  // Notify parent to refresh list
                     onClose();
                 }, 1000);
             } catch (err) {
@@ -51,11 +51,11 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
 
     if (!isOpen) return null;
 
-    // 处理官方导入
+    // Handle official import
     const handleSubmitOfficial = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) {
-            setError('请输入账号名称');
+            setError('Please enter account name');
             return;
         }
 
@@ -72,16 +72,16 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
         }
     };
 
-    // 处理 OpenAI 登录
+    // Handle OpenAI login
     const handleOpenAILogin = async () => {
         setLoading(true);
         setError(null);
-        setOauthStatus('正在启动官方浏览器授权...');
+        setOauthStatus('Starting official browser authorization...');
 
         try {
-            // 启动 OAuth 后端任务，后端会处理打开浏览器和启动监听
+            // Start OAuth backend task, backend will open browser and start listener
             await startOAuthLogin();
-            setOauthStatus('请在打开的浏览器窗口中完成 OpenAI 授权...');
+            setOauthStatus('Please complete OpenAI authorization in the opened browser window...');
         } catch (err) {
             setError(String(err));
             setOauthStatus('');
@@ -90,7 +90,7 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
     };
 
     const handleClose = () => {
-        if (loading && !oauthStatus.includes('成功')) return;
+        if (loading && !oauthStatus.includes('successful')) return;
         setName('');
         setNotes('');
         setError(null);
@@ -103,8 +103,8 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
             <div className="modal-content" onClick={e => e.stopPropagation()}>
                 <div className="modal-header">
                     <div className="header-top">
-                        <h2>添加账号</h2>
-                        <button className="close-btn" onClick={handleClose} disabled={loading && !oauthStatus.includes('成功')}>
+                        <h2>Add Account</h2>
+                        <button className="close-btn" onClick={handleClose} disabled={loading && !oauthStatus.includes('successful')}>
                             ×
                         </button>
                     </div>
@@ -113,13 +113,13 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                             className={`tab-item ${activeTab === 'openai' ? 'active' : ''}`}
                             onClick={() => !loading && setActiveTab('openai')}
                         >
-                            OpenAI 登录 (推荐)
+                            OpenAI Login (Recommended)
                         </button>
                         <button
                             className={`tab-item ${activeTab === 'official' ? 'active' : ''}`}
                             onClick={() => !loading && setActiveTab('official')}
                         >
-                            从官方导入
+                            Import from Official
                         </button>
                     </div>
                 </div>
@@ -128,29 +128,29 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                     {activeTab === 'official' ? (
                         <form onSubmit={handleSubmitOfficial}>
                             <p className="modal-tip">
-                                将从本地官方 Codex 的登录状态 (`auth.json`) 中提取认证信息。
+                                Will extract authentication information from local official Codex login status (`auth.json`).
                             </p>
 
                             <div className="form-group">
-                                <label htmlFor="name">账号名称 *</label>
+                                <label htmlFor="name">Account Name *</label>
                                 <input
                                     id="name"
                                     type="text"
                                     value={name}
                                     onChange={e => setName(e.target.value)}
-                                    placeholder="例如：工作账号、个人账号"
+                                    placeholder="e.g. Work Account, Personal Account"
                                     disabled={loading}
                                     autoFocus
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="notes">备注</label>
+                                <label htmlFor="notes">Notes</label>
                                 <textarea
                                     id="notes"
                                     value={notes}
                                     onChange={e => setNotes(e.target.value)}
-                                    placeholder="可选的备注信息..."
+                                    placeholder="Optional notes..."
                                     disabled={loading}
                                     rows={3}
                                 />
@@ -160,19 +160,19 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
 
                             <div className="modal-footer" style={{ padding: '16px 0 0', border: 'none' }}>
                                 <button type="button" className="btn btn-ghost" onClick={handleClose} disabled={loading}>
-                                    取消
+                                    Cancel
                                 </button>
                                 <button type="submit" className="btn btn-primary" disabled={loading}>
-                                    {loading ? '导入中...' : '导入当前账号'}
+                                    {loading ? 'Importing...' : 'Import Current Account'}
                                 </button>
                             </div>
                         </form>
                     ) : (
                         <div className="oauth-content">
                             <div className="oauth-icon">🛡️</div>
-                            <h3 style={{ marginBottom: '8px', color: 'var(--text-primary)' }}>官方 OAuth 授权</h3>
+                            <h3 style={{ marginBottom: '8px', color: 'var(--text-primary)' }}>Official OAuth Authorization</h3>
                             <p className="oauth-desc">
-                                直接通过 OpenAI 官方渠道登录。支持令牌自动续期，多账号切换更稳定，无需再手动更新 `auth.json`。
+                                Log in directly through OpenAI official channel. Supports token automatic renewal, multi-account switching is more stable, no need to manually update `auth.json`.
                             </p>
 
                             <button
@@ -181,7 +181,7 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                                 onClick={handleOpenAILogin}
                                 disabled={loading}
                             >
-                                {loading && oauthStatus ? '处理中...' : '立即登录 OpenAI'}
+                                {loading && oauthStatus ? 'Processing...' : 'Login with OpenAI'}
                             </button>
 
                             {!loading && (
@@ -190,7 +190,7 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                                     style={{ marginTop: '12px' }}
                                     onClick={handleClose}
                                 >
-                                    取消
+                                    Cancel
                                 </button>
                             )}
 
@@ -198,7 +198,7 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                             {error && <div className="error-message" style={{ marginTop: '16px' }}>{error}</div>}
 
                             <div style={{ marginTop: '16px', fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                                授权将在你系统的默认浏览器中完成，安全可信。
+                                Authorization will complete in your system default browser, safe and trusted.
                             </div>
                         </div>
                     )}

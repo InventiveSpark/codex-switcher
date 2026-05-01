@@ -1,6 +1,6 @@
-//! 切号日志模块
+//! Account switch log module
 //!
-//! 记录每次切号的时间、来源、目标、原因，持久化到 JSONL 文件。
+//! Record timestamp, source, target, and reason for each switch, persist to JSONL file.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -22,14 +22,14 @@ pub enum SwitchReason {
 impl std::fmt::Display for SwitchReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SwitchReason::Manual => write!(f, "手动切号"),
-            SwitchReason::Http429 => write!(f, "429 限额"),
-            SwitchReason::QuotaThreshold => write!(f, "阈值预防"),
-            SwitchReason::WebSocketPrecheck => write!(f, "WS 预检"),
-            SwitchReason::WebSocketRateLimit => write!(f, "WS 限额"),
-            SwitchReason::BannedDetected => write!(f, "封号检测"),
-            SwitchReason::AutoQuotaRefresh => write!(f, "自动刷新"),
-            SwitchReason::BackgroundKeepalive => write!(f, "后台保活"),
+            SwitchReason::Manual => write!(f, "Manual Switch"),
+            SwitchReason::Http429 => write!(f, "429 Limit"),
+            SwitchReason::QuotaThreshold => write!(f, "Threshold Preempt"),
+            SwitchReason::WebSocketPrecheck => write!(f, "WS Precheck"),
+            SwitchReason::WebSocketRateLimit => write!(f, "WS Limit"),
+            SwitchReason::BannedDetected => write!(f, "Ban Detected"),
+            SwitchReason::AutoQuotaRefresh => write!(f, "Auto Refresh"),
+            SwitchReason::BackgroundKeepalive => write!(f, "Background Keepalive"),
         }
     }
 }
@@ -44,7 +44,7 @@ pub struct SwitchEvent {
     pub to_quota_5h: Option<f64>,
 }
 
-/// 切号日志管理器
+/// Account switch log manager
 pub struct SwitchLogger {
     events: Mutex<Vec<SwitchEvent>>,
 }
@@ -52,7 +52,7 @@ pub struct SwitchLogger {
 impl SwitchLogger {
     pub fn new() -> std::sync::Arc<Self> {
         let mut events = Self::load_from_disk();
-        // 清理 30 天前的记录
+        // Clean up records older than 30 days
         let cutoff = Utc::now() - chrono::Duration::days(30);
         events.retain(|e| e.timestamp > cutoff);
 
@@ -61,7 +61,7 @@ impl SwitchLogger {
         })
     }
 
-    /// 记录一次切号事件
+    /// Record an account switch event
     pub fn log_switch(
         &self,
         from_account: Option<String>,
@@ -81,7 +81,7 @@ impl SwitchLogger {
 
         println!(
             "[SwitchLog] {} → {} ({})",
-            event.from_account.as_deref().unwrap_or("无"),
+            event.from_account.as_deref().unwrap_or("None"),
             event.to_account,
             event.reason
         );
@@ -92,7 +92,7 @@ impl SwitchLogger {
         }
     }
 
-    /// 获取最近 N 天的切号记录
+    /// Get switch records for last N days
     pub fn get_history(&self, days: u32) -> Vec<SwitchEvent> {
         let cutoff = Utc::now() - chrono::Duration::days(days as i64);
         self.events
@@ -107,7 +107,7 @@ impl SwitchLogger {
             .unwrap_or_default()
     }
 
-    /// 统计摘要
+    /// Statistics summary
     pub fn get_stats(&self) -> SwitchStats {
         let events = self.events.lock().map(|e| e.clone()).unwrap_or_default();
         let now = Utc::now();
@@ -118,14 +118,14 @@ impl SwitchLogger {
         let week_count = events.iter().filter(|e| e.timestamp > week_start).count();
         let total_count = events.len();
 
-        // 按原因统计
+        // Count by reason
         let mut by_reason = std::collections::HashMap::new();
         for e in &events {
             let key = format!("{}", e.reason);
             *by_reason.entry(key).or_insert(0u64) += 1;
         }
 
-        // 按目标账号统计
+        // Count by target account
         let mut by_account = std::collections::HashMap::new();
         for e in &events {
             *by_account.entry(e.to_account.clone()).or_insert(0u64) += 1;

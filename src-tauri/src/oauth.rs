@@ -3,27 +3,27 @@ use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// OpenAI 官方授权常量 (参考 codex-main)
+/// OpenAI official OAuth constants (reference: codex-main)
 pub const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 pub const AUTH_URL: &str = "https://auth.openai.com/oauth/authorize";
 pub const TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 
-/// PKCE 相关的代码
+/// PKCE-related code
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PkceCodes {
     pub code_verifier: String,
     pub code_challenge: String,
 }
 
-/// 生成 PKCE 代码对 (与官方一致: 64字节)
+/// Generate PKCE code pair (matches official: 64 bytes)
 pub fn generate_pkce() -> PkceCodes {
     let mut bytes = [0u8; 64];
     rng().fill_bytes(&mut bytes);
 
-    // 生成 verifier (Base64URL 编码)
+    // Generate verifier (Base64URL encoded)
     let code_verifier = general_purpose::URL_SAFE_NO_PAD.encode(bytes);
 
-    // 生成 challenge (SHA256 哈希后 Base64URL 编码)
+    // Generate challenge (SHA256 hash then Base64URL encoded)
     let mut hasher = Sha256::new();
     hasher.update(code_verifier.as_bytes());
     let code_challenge = general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize());
@@ -34,7 +34,7 @@ pub fn generate_pkce() -> PkceCodes {
     }
 }
 
-/// 令牌响应结构
+/// Token response structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenResponse {
     pub access_token: String,
@@ -43,14 +43,14 @@ pub struct TokenResponse {
     pub expires_in: Option<u64>,
 }
 
-/// 用户信息预提取 (通过解析 id_token)
+/// User info pre-extraction (by parsing id_token)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserInfo {
     pub email: String,
     pub account_id: Option<String>,
 }
 
-/// 使用授权码交换访问令牌 (与官方一致: 手动拼接请求体)
+/// Exchange authorization code for access token (matches official: manually construct request body)
 pub async fn exchange_code(
     code: &str,
     redirect_uri: &str,
@@ -58,7 +58,7 @@ pub async fn exchange_code(
 ) -> Result<TokenResponse, String> {
     let client = reqwest::Client::new();
 
-    // 官方格式: 手动拼接字符串
+    // Official format: manual string concatenation
     let body = format!(
         "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&code_verifier={}",
         urlencoding::encode(code),
@@ -73,20 +73,20 @@ pub async fn exchange_code(
         .body(body)
         .send()
         .await
-        .map_err(|e| format!("请求令牌失败: {}", e))?;
+        .map_err(|e| format!("Token request failed: {}", e))?;
 
     if !response.status().is_success() {
         let error_body = response.text().await.unwrap_or_default();
-        return Err(format!("OpenAI 返回错误: {}", error_body));
+        return Err(format!("OpenAI returned error: {}", error_body));
     }
 
     response
         .json::<TokenResponse>()
         .await
-        .map_err(|e| format!("解析令牌响应失败: {}", e))
+        .map_err(|e| format!("Failed to parse token response: {}", e))
 }
 
-/// 使用刷新令牌获取新访问令牌
+/// Use refresh token to get new access token
 pub async fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, String> {
     let client = reqwest::Client::new();
 
@@ -103,20 +103,20 @@ pub async fn refresh_access_token(refresh_token: &str) -> Result<TokenResponse, 
         .form(&params)
         .send()
         .await
-        .map_err(|e| format!("刷新令牌失败: {}", e))?;
+        .map_err(|e| format!("Token refresh failed: {}", e))?;
 
     if !response.status().is_success() {
         let error_body = response.text().await.unwrap_or_default();
-        return Err(format!("刷新令牌被拒绝: {}", error_body));
+        return Err(format!("Token refresh rejected: {}", error_body));
     }
 
     response
         .json::<TokenResponse>()
         .await
-        .map_err(|e| format!("解析刷新响应失败: {}", e))
+        .map_err(|e| format!("Failed to parse refresh response: {}", e))
 }
 
-/// 从 ID Token 中提取用户信息 (JWT 解析)
+/// Extract user info from ID Token (JWT parsing)
 pub fn parse_user_info(id_token: &str) -> Option<UserInfo> {
     let parts: Vec<&str> = id_token.split('.').collect();
     if parts.len() < 2 {
@@ -128,7 +128,7 @@ pub fn parse_user_info(id_token: &str) -> Option<UserInfo> {
 
     let email = json.get("email")?.as_str()?.to_string();
 
-    // 从 OpenAI 特有的 claims 中获取 account_id
+    // Get account_id from OpenAI-specific claims
     let account_id = json
         .get("https://api.openai.com/auth")
         .and_then(|v| v.get("chatgpt_account_id"))

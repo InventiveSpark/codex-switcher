@@ -1,48 +1,48 @@
-//! Codex Switcher - 用量获取模块
+//! Codex Switcher - Usage fetch module
 //!
-//! 从 OpenAI API 获取 Codex 使用量信息
+//! Fetch Codex usage information from OpenAI API
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// 前端展示的用量数据
+/// Usage data displayed in frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsageDisplay {
-    /// 套餐类型
+    /// Plan type
     pub plan_type: String,
-    /// 5小时窗口使用百分比
+    /// 5-hour window usage percentage
     pub five_hour_used: i32,
-    /// 5小时窗口剩余百分比
+    /// 5-hour window remaining percentage
     pub five_hour_left: i32,
-    /// 5小时窗口标签 (如 "5H 限额")
+    /// 5-hour window label (e.g. "5H Limit")
     pub five_hour_label: String,
-    /// 5小时重置时间描述
+    /// 5-hour reset time description
     pub five_hour_reset: String,
-    /// 5小时重置时间戳
+    /// 5-hour reset timestamp
     pub five_hour_reset_at: Option<i64>,
-    /// 周窗口使用百分比
+    /// Weekly window usage percentage
     pub weekly_used: i32,
-    /// 周窗口剩余百分比
+    /// Weekly window remaining percentage
     pub weekly_left: i32,
-    /// 周窗口标签 (如 "周限额")
+    /// Weekly window label (e.g. "Weekly Limit")
     pub weekly_label: String,
-    /// 周重置时间描述
+    /// Weekly reset time description
     pub weekly_reset: String,
-    /// 周重置时间戳
+    /// Weekly reset timestamp
     pub weekly_reset_at: Option<i64>,
-    /// 额度余额
+    /// Credits balance
     pub credits_balance: Option<f64>,
-    /// 是否有额度
+    /// Has credits
     pub has_credits: bool,
-    /// Token 是否对 CLI 有效 (api.openai.com)
+    /// Token valid for CLI (api.openai.com)
     pub is_valid_for_cli: bool,
 }
 
-/// 用量获取器
+/// Usage fetcher
 pub struct UsageFetcher;
 
 impl UsageFetcher {
-    /// 从 API 获取用量 (直接使用提供的 Token，不读取 auth.json)
+    /// Fetch usage from API (using provided token directly, does not read auth.json)
     pub async fn fetch_usage_direct(
         access_token: String,
         account_id: Option<String>,
@@ -74,11 +74,11 @@ impl UsageFetcher {
         let mut response = build_request(&current_token, &account_id)
             .send()
             .await
-            .map_err(|e| format!("网络请求失败: {}", e))?;
+            .map_err(|e| format!("Network request failed: {}", e))?;
 
         let mut status = response.status();
 
-        // 如果允许本地刷新，且 401/403 且有 refresh_token，尝试刷新
+        // If local refresh allowed, and 401/403 with refresh_token, attempt refresh
         if allow_local_refresh && (status == 401 || status == 403) && refresh_token.is_some() {
             if let Some(ref rt) = refresh_token {
                 match crate::oauth::refresh_access_token(rt).await {
@@ -86,11 +86,11 @@ impl UsageFetcher {
                         current_token = token_res.access_token.clone();
                         new_tokens = Some(token_res);
 
-                        // 重试请求
+                        // Retry request
                         response = build_request(&current_token, &account_id)
                             .send()
                             .await
-                            .map_err(|e| format!("刷新后重试失败: {}", e))?;
+                            .map_err(|e| format!("Retry after refresh failed: {}", e))?;
                         status = response.status();
                     }
                     Err(e) => {
@@ -99,7 +99,7 @@ impl UsageFetcher {
                             || lower.contains("signed in to another account")
                             || lower.contains("invalid_grant")
                         {
-                            return Err("ACCOUNT_LOGGED_OUT:您已登出或登录了其他账号，请重新登录"
+                            return Err("ACCOUNT_LOGGED_OUT:You have logged out or signed in to another account, please sign in again"
                                 .to_string());
                         }
                     }
@@ -108,7 +108,7 @@ impl UsageFetcher {
         }
 
         if status == 401 || status == 403 {
-            // 读取响应体以检测是否为封号
+            // Read response body to detect account ban
             let body = response.text().await.unwrap_or_default().to_lowercase();
             let is_banned = body.contains("deactivated")
                 || body.contains("banned")
@@ -116,27 +116,28 @@ impl UsageFetcher {
                 || body.contains("account_deactivated");
 
             if is_banned {
-                return Err("ACCOUNT_BANNED:该账号已被封禁".to_string());
+                return Err("ACCOUNT_BANNED:This account has been banned".to_string());
             }
 
             if !allow_local_refresh {
                 return Err(
-                    "当前激活账号访问配额接口返回 401/403；已禁用本地 refresh_token 刷新，请稍后重试或在 Codex 中触发一次请求".to_string(),
+                    "Current active account quota API returned 401/403; local refresh_token refresh is disabled, please retry later or trigger a request in Codex".to_string(),
                 );
             }
-            // 如果刷新后仍然 401/403，标记为无效
-            return Err("TOKEN_INVALID:授权已失效，请删除该账号后重新登录".to_string());
+            // If still 401/403 after refresh, mark as invalid
+            return Err("TOKEN_INVALID:Authorization expired, please delete this account and sign in again".to_string());
         }
 
         let text = response
             .text()
             .await
-            .map_err(|e| format!("读取响应失败: {}", e))?;
+            .map_err(|e| format!("Failed to read response body: {}", e))?;
 
         let json: Value =
-            serde_json::from_str(&text).map_err(|e| format!("解析 JSON 失败: {}", e))?;
+            serde_json::from_str(&text)
+            .map_err(|e| format!("Failed to parse JSON response: {}", e))?;
 
-        // 检测 200 状态码下的软封号/停用响应，如 {"detail":{"code":"deactivated_workspace"}}
+        // Detect soft ban/deactivation response under 200 status, e.g. {"detail":{"code":"deactivated_workspace"}}
         if let Some(detail_code) = json
             .get("detail")
             .and_then(|d| d.get("code"))
@@ -147,8 +148,8 @@ impl UsageFetcher {
                 || code_lower.contains("banned")
                 || code_lower.contains("suspended")
             {
-                println!("[Usage] 检测到账号停用: detail.code={}", detail_code);
-                return Err("ACCOUNT_BANNED:该账号已被封禁(workspace 已停用)".to_string());
+                println!("[Usage] Detected account deactivation: detail.code={}", detail_code);
+                return Err("ACCOUNT_BANNED:This account has been banned (workspace deactivated)".to_string());
             }
         }
 
@@ -157,7 +158,7 @@ impl UsageFetcher {
         Ok((display, new_tokens))
     }
 
-    /// 从 Value 解析用量数据
+    /// Parse usage data from Value
     fn parse_usage_response(json: &Value) -> Result<UsageDisplay, String> {
         let plan_type = json
             .get("plan_type")
@@ -167,15 +168,15 @@ impl UsageFetcher {
 
         let rate_limit = json.get("rate_limit");
 
-        // 解析 5 小时窗口 (Primary)
+        // Parse 5-hour window (Primary)
         let primary_val = rate_limit.and_then(|r| r.get("primary_window"));
-        let (p_used, p_reset, p_label, p_reset_at) = Self::parse_window(primary_val, "5H 限额");
+        let (p_used, p_reset, p_label, p_reset_at) = Self::parse_window(primary_val, "5H Limit");
 
-        // 解析周窗口 (Secondary)
+        // Parse weekly window (Secondary)
         let secondary_val = rate_limit.and_then(|r| r.get("secondary_window"));
-        let (s_used, s_reset, s_label, s_reset_at) = Self::parse_window(secondary_val, "周限额");
+        let (s_used, s_reset, s_label, s_reset_at) = Self::parse_window(secondary_val, "Weekly Limit");
 
-        // 解析额度
+        // Parse credits
         let credits = json.get("credits");
         let has_credits = credits
             .and_then(|c| c.get("has_credits"))
@@ -207,17 +208,17 @@ impl UsageFetcher {
         })
     }
 
-    /// 解析窗口数据
+    /// Parse window data
     fn parse_window(
         window: Option<&Value>,
         default_label: &str,
     ) -> (i32, String, String, Option<i64>) {
         let window = match window {
             Some(w) => w,
-            None => return (0, "未知".to_string(), default_label.to_string(), None),
+            None => return (0, "Unknown".to_string(), default_label.to_string(), None),
         };
 
-        // 关键修复：使用 f64 解析百分比，然后四舍五入
+        // Critical fix: use f64 to parse percentage, then round
         let used_percent = window
             .get("used_percent")
             .and_then(Self::parse_number)
@@ -235,7 +236,7 @@ impl UsageFetcher {
             .map(|f| f as i64)
             .unwrap_or(0);
 
-        // 动态计算标签
+        // Dynamically calculate label
         let label = if limit_window_seconds > 0 {
             Self::get_limits_label(limit_window_seconds)
         } else {
@@ -246,10 +247,10 @@ impl UsageFetcher {
             if ts > 0 {
                 Self::format_reset(ts)
             } else {
-                "未知".to_string()
+                "Unknown".to_string()
             }
         } else {
-            // 尝试使用 reset_after_seconds
+            // Try using reset_after_seconds
             let reset_after = window
                 .get("reset_after_seconds")
                 .or_else(|| window.get("reset_after_sec"))
@@ -259,31 +260,31 @@ impl UsageFetcher {
             if reset_after > 0 {
                 Self::format_duration(reset_after)
             } else {
-                "未知".to_string()
+                "Unknown".to_string()
             }
         };
 
         (used_percent, reset_str, label, reset_at)
     }
 
-    /// 根据窗口秒数获取人类可读标签
+    /// Get human-readable label from window seconds
     fn get_limits_label(seconds: i64) -> String {
         const SECS_PER_HOUR: i64 = 3600;
         const SECS_PER_DAY: i64 = 24 * SECS_PER_HOUR;
         const SECS_PER_WEEK: i64 = 7 * SECS_PER_DAY;
 
         if seconds <= SECS_PER_HOUR * 5 + 600 {
-            "5H 限额".to_string()
+            "5H Limit".to_string()
         } else if seconds <= SECS_PER_DAY + 600 {
-            "24H 限额".to_string()
+            "24H Limit".to_string()
         } else if seconds <= SECS_PER_WEEK + 3600 {
-            "周限额".to_string()
+            "Weekly Limit".to_string()
         } else {
-            format!("{}H 限额", (seconds + 3599) / 3600)
+            format!("{}H Limit", (seconds + 3599) / 3600)
         }
     }
 
-    /// 解析数字（支持字符串和数字）
+    /// Parse number (supports string and number)
     fn parse_number(v: &Value) -> Option<f64> {
         match v {
             Value::Number(n) => n.as_f64(),
@@ -292,7 +293,7 @@ impl UsageFetcher {
         }
     }
 
-    /// 解析整数（支持字符串和数字）
+    /// Parse integer (supports string and number)
     fn parse_int(v: &Value) -> Option<i32> {
         match v {
             Value::Number(n) => n.as_i64().map(|i| i as i32),
@@ -301,12 +302,12 @@ impl UsageFetcher {
         }
     }
 
-    /// 格式化重置时间（时间戳）
+    /// Format reset time (timestamp)
     fn format_reset(reset_at: i64) -> String {
         use chrono::{TimeZone, Utc};
 
         if reset_at == 0 {
-            return "未知".to_string();
+            return "Unknown".to_string();
         }
 
         let reset_time = Utc
@@ -319,37 +320,37 @@ impl UsageFetcher {
         Self::format_chrono_duration(duration)
     }
 
-    /// 格式化持续时间（秒）
+    /// Format duration (seconds)
     fn format_duration(seconds: i64) -> String {
         let hours = seconds / 3600;
         let minutes = (seconds % 3600) / 60;
 
         if hours > 24 {
             let days = hours / 24;
-            format!("{}天后重置", days)
+            format!("Resets in {} days", days)
         } else if hours > 0 {
-            format!("{}小时{}分钟后重置", hours, minutes)
+            format!("Resets in {}h {}m", hours, minutes)
         } else if minutes > 0 {
-            format!("{}分钟后重置", minutes)
+            format!("Resets in {}m", minutes)
         } else {
-            "即将重置".to_string()
+            "Reset soon".to_string()
         }
     }
 
-    /// 格式化 chrono Duration
+    /// Format chrono Duration
     fn format_chrono_duration(duration: chrono::Duration) -> String {
         let hours = duration.num_hours();
         let minutes = duration.num_minutes() % 60;
 
         if hours > 24 {
             let days = hours / 24;
-            format!("{}天后重置", days)
+            format!("Resets in {} days", days)
         } else if hours > 0 {
-            format!("{}小时{}分钟后重置", hours, minutes.abs())
+            format!("Resets in {}h {}m", hours, minutes.abs())
         } else if minutes > 0 {
-            format!("{}分钟后重置", minutes)
+            format!("Resets in {}m", minutes)
         } else {
-            "即将重置".to_string()
+            "Reset soon".to_string()
         }
     }
 }

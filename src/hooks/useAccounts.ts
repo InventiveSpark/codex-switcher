@@ -68,7 +68,7 @@ export function useAccounts() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    // 加载账号和设置
+    // Load accounts and settings
     const loadData = useCallback(async () => {
         try {
             setError(null);
@@ -89,7 +89,7 @@ export function useAccounts() {
         }
     }, []);
 
-    // 初始加载
+    // Initial load
     useEffect(() => {
         loadData();
     }, [loadData]);
@@ -105,7 +105,7 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 更新设置
+    // Update settings
     const updateSettings = useCallback(async (newSettings: AppSettings) => {
         try {
             setError(null);
@@ -117,9 +117,9 @@ export function useAccounts() {
         }
     }, []);
 
-    // ... 其他方法保持不变，但使用 loadData 替换 loadAccounts ...
+    // ... other methods remain unchanged, but use loadData instead of loadAccounts ...
 
-    // 导入当前账号
+    // Import current account
     const importCurrent = useCallback(async (name: string, notes?: string) => {
         try {
             setError(null);
@@ -131,7 +131,7 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 切换账号
+    // Switch account
     const switchTo = useCallback(async (id: string) => {
         try {
             setError(null);
@@ -144,11 +144,11 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 删除账号（带确认）
+    // Delete account (with confirmation)
     const deleteAccount = useCallback(async (id: string) => {
         const account = accounts.find(a => a.id === id);
         const name = account?.name || id;
-        if (!window.confirm(`确定要删除账号 ${name} 吗？`)) return;
+        if (!window.confirm(`Are you sure you want to delete account ${name}?`)) return;
         try {
             setError(null);
             if (currentId === id) {
@@ -162,7 +162,7 @@ export function useAccounts() {
         }
     }, [loadData, accounts, currentId]);
 
-    // 更新账号
+    // Update account
     const updateAccount = useCallback(async (id: string, name?: string, notes?: string) => {
         try {
             setError(null);
@@ -174,7 +174,7 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 导出
+    // Export
     const exportAccounts = useCallback(async () => {
         try {
             return await invoke<string>('export_accounts');
@@ -184,7 +184,7 @@ export function useAccounts() {
         }
     }, []);
 
-    // 导入
+    // Import
     const importAccounts = useCallback(async (json: string) => {
         try {
             setError(null);
@@ -196,7 +196,7 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 检查 Codex 登录状态
+    // Check Codex login status
     const checkCodexLogin = useCallback(async () => {
         try {
             return await invoke<boolean>('check_codex_login');
@@ -205,7 +205,7 @@ export function useAccounts() {
         }
     }, []);
 
-    // 开始 OAuth 登录
+    // Start OAuth login
     const startOAuthLogin = useCallback(async () => {
         try {
             setError(null);
@@ -216,7 +216,7 @@ export function useAccounts() {
         }
     }, []);
 
-    // 完成 OAuth 登录
+    // Complete OAuth login
     const finalizeOAuthLogin = useCallback(async (code: string) => {
         try {
             setError(null);
@@ -229,7 +229,7 @@ export function useAccounts() {
         }
     }, [loadData]);
 
-    // 重载 IDE 窗口
+    // Reload IDE window
     const reloadIdeWindows = useCallback(async (useWindowReload: boolean = false) => {
         try {
             setError(null);

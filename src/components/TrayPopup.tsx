@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-// Rust 端 on_window_event(Focused(false)) 负责隐藏弹窗
+// Rust on_window_event(Focused(false)) handles hiding the popup
 import './TrayPopup.css';
 
 interface QuotaInfo {
@@ -47,9 +47,9 @@ interface TrayData {
 }
 
 function formatCountdown(resetAt: number | null): string {
-    if (!resetAt || resetAt <= 0) return '未知';
+    if (!resetAt || resetAt <= 0) return 'Unknown';
     const diff = resetAt - Math.floor(Date.now() / 1000);
-    if (diff <= 0) return '已重置';
+    if (diff <= 0) return 'Reset';
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -113,7 +113,7 @@ export function TrayPopup() {
         const interval = setInterval(fetchData, 5000);
         const unsub = listen('accounts-updated', fetchData);
 
-        // 焦点丢失由 Rust 端 on_window_event 处理
+        // Focus lost handled by Rust on_window_event
 
         return () => {
             clearInterval(interval);
@@ -176,9 +176,9 @@ export function TrayPopup() {
                 <div className="tp-account">
                     {data.account.name}
                     <span className="tp-plan">{q?.plan_type || '-'}</span>
-                    {data.account.is_banned && <span className="tp-banned">封号</span>}
-                    {data.account.is_logged_out && !data.account.is_banned && <span className="tp-logged-out">登出</span>}
-                    {data.account.is_token_invalid && !data.account.is_banned && !data.account.is_logged_out && <span className="tp-invalid">失效</span>}
+                    {data.account.is_banned && <span className="tp-banned">Banned</span>}
+                    {data.account.is_logged_out && !data.account.is_banned && <span className="tp-logged-out">Logged Out</span>}
+                    {data.account.is_token_invalid && !data.account.is_banned && !data.account.is_logged_out && <span className="tp-invalid">Invalid</span>}
                 </div>
             )}
 
@@ -234,7 +234,7 @@ export function TrayPopup() {
                     </div>
                     {data?.tokens.last_month_cost !== null && data?.tokens.last_month_cost !== undefined && (
                         <div className="tp-compare">
-                            Vs 上月 ${data.tokens.last_month_cost.toFixed(2)}
+                            Vs Last Month ${data.tokens.last_month_cost.toFixed(2)}
                         </div>
                     )}
                 </div>

@@ -49,7 +49,7 @@ function formatTokens(n: number): string {
 
 function formatTime(ts: string): string {
     const d = new Date(ts);
-    return d.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(from: string, to: string): string {
@@ -85,20 +85,20 @@ export function Stats() {
             setSwitchStats(ss);
             setTokenStats(ts);
         } catch (e) {
-            console.error('加载统计数据失败:', e);
+            console.error('Failed to load stats:', e);
         }
     };
 
     useEffect(() => { fetchData(); }, [range]);
 
-    // 聚合 token 趋势数据（按小时/天）
+    // Aggregate token trend data (by hour/day)
     const trendData = (() => {
         const buckets: Record<string, { label: string; input: number; output: number; cost: number }> = {};
         for (const entry of tokenHistory) {
             const d = new Date(entry.timestamp);
             const key = range === 'day'
-                ? d.toLocaleTimeString('zh-CN', { hour: '2-digit' })
-                : d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+                ? d.toLocaleTimeString('en-US', { hour: '2-digit' })
+                : d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
             if (!buckets[key]) buckets[key] = { label: key, input: 0, output: 0, cost: 0 };
             buckets[key].input += entry.input_tokens;
             buckets[key].output += entry.output_tokens;
@@ -107,7 +107,7 @@ export function Stats() {
         return Object.values(buckets);
     })();
 
-    // 按模型分布（饼图）
+    // Model distribution (pie chart)
     const modelData = (() => {
         const map: Record<string, number> = {};
         for (const entry of tokenHistory) {
@@ -116,21 +116,21 @@ export function Stats() {
         return Object.entries(map).map(([name, value]) => ({ name, value }));
     })();
 
-    // 切号原因分布
+    // Switch reason distribution
     const reasonData = switchStats
         ? Object.entries(switchStats.by_reason).map(([name, value]) => ({ name, value }))
         : [];
 
     const accountCount = switchStats ? Object.keys(switchStats.by_account).length : 0;
 
-    // 分离常规切号与系统后台任务
-    const actualSwitches = switchHistory.filter(e => e.reason !== '自动刷新' && e.reason !== '后台保活');
-    const systemLogs = switchHistory.filter(e => e.reason === '自动刷新' || e.reason === '后台保活');
+    // Separate regular switches from system background tasks
+    const actualSwitches = switchHistory.filter(e => e.reason !== 'Auto Refresh' && e.reason !== 'Background Keepalive');
+    const systemLogs = switchHistory.filter(e => e.reason === 'Auto Refresh' || e.reason === 'Background Keepalive');
 
     return (
         <div className="stats-page">
             <div className="stats-header">
-                <h2>统计</h2>
+                <h2>Stats</h2>
                 <div className="time-range-btns">
                     {(['day', 'week', 'month'] as TimeRange[]).map(r => (
                         <button
@@ -138,36 +138,36 @@ export function Stats() {
                             className={`range-btn ${range === r ? 'active' : ''}`}
                             onClick={() => setRange(r)}
                         >
-                            {r === 'day' ? '日' : r === 'week' ? '周' : '月'}
+                            {r === 'day' ? 'Day' : r === 'week' ? 'Week' : 'Month'}
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* 摘要卡片 */}
+            {/* Summary Cards */}
             <div className="stats-cards">
                 <div className="stat-card purple">
                     <div className="stat-card-value">{formatTokens(tokenStats?.total_tokens ?? 0)}</div>
-                    <div className="stat-card-label">Token 总量</div>
+                    <div className="stat-card-label">Total Tokens</div>
                 </div>
                 <div className="stat-card yellow">
                     <div className="stat-card-value">${(tokenStats?.total_cost_usd ?? 0).toFixed(2)}</div>
-                    <div className="stat-card-label">总费用</div>
+                    <div className="stat-card-label">Total Cost</div>
                 </div>
                 <div className="stat-card green">
                     <div className="stat-card-value">{switchStats?.total_count ?? 0}</div>
-                    <div className="stat-card-label">切号次数</div>
+                    <div className="stat-card-label">Switch Count</div>
                 </div>
                 <div className="stat-card blue">
                     <div className="stat-card-value">{accountCount}</div>
-                    <div className="stat-card-label">使用账号数</div>
+                    <div className="stat-card-label">Accounts Used</div>
                 </div>
             </div>
 
-            {/* Token 趋势图 */}
+            {/* Token Trend Chart */}
             {trendData.length > 0 && (
                 <div className="stats-section">
-                    <h3>Token 趋势</h3>
+                    <h3>Token Trend</h3>
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={trendData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -185,11 +185,11 @@ export function Stats() {
                 </div>
             )}
 
-            {/* 下半部：费用 + 模型分布 */}
+            {/* Bottom: Cost + Model Distribution */}
             <div className="stats-grid">
                 {trendData.length > 0 && (
                     <div className="stats-section">
-                        <h3>费用趋势</h3>
+                        <h3>Cost Trend</h3>
                         <ResponsiveContainer width="100%" height={200}>
                             <BarChart data={trendData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -197,7 +197,7 @@ export function Stats() {
                                 <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} tickFormatter={v => `$${v}`} />
                                 <Tooltip
                                     contentStyle={{ background: '#1e1245', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-                                    formatter={(v) => [`$${Number(v).toFixed(4)}`, '费用']}
+                                    formatter={(v) => [`$${Number(v).toFixed(4)}`, 'Cost']}
                                 />
                                 <Bar dataKey="cost" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                             </BarChart>
@@ -207,7 +207,7 @@ export function Stats() {
 
                 {(modelData.length > 0 || reasonData.length > 0) && (
                     <div className="stats-section">
-                        <h3>{modelData.length > 0 ? '模型分布' : '切号原因'}</h3>
+                        <h3>{modelData.length > 0 ? 'Model Distribution' : 'Switch Reasons'}</h3>
                         <ResponsiveContainer width="100%" height={200}>
                             <PieChart>
                                 <Pie
@@ -233,18 +233,18 @@ export function Stats() {
                 )}
             </div>
 
-            {/* 切号日志 */}
+            {/* Switch Log */}
             <div className="stats-section">
-                <h3>切号日志 ({actualSwitches.length} 条)</h3>
+                <h3>Switch Log ({actualSwitches.length})</h3>
                 <div className="switch-log-table">
                     <div className="log-header">
-                        <span>时间</span>
-                        <span>切换路径</span>
-                        <span>原因</span>
-                        <span>使用时长</span>
+                        <span>Time</span>
+                        <span>Switch Path</span>
+                        <span>Reason</span>
+                        <span>Duration</span>
                     </div>
                     {actualSwitches.length === 0 ? (
-                        <div className="log-empty">暂无切号记录</div>
+                        <div className="log-empty">No switch records</div>
                     ) : (
                         actualSwitches.map((e, i) => (
                             <div key={i} className="log-row">
@@ -268,16 +268,16 @@ export function Stats() {
                 </div>
             </div>
 
-            {/* 后台任务日志 */}
+            {/* Background Task Log */}
             {systemLogs.length > 0 && (
                 <div className="stats-section">
-                    <h3>后台任务日志 ({systemLogs.length} 条)</h3>
+                    <h3>Background Task Log ({systemLogs.length})</h3>
                     <div className="switch-log-table">
                         <div className="log-header">
-                            <span>时间</span>
-                            <span>目标账号</span>
-                            <span>任务类型</span>
-                            <span>刷新后额度</span>
+                            <span>Time</span>
+                            <span>Target Account</span>
+                            <span>Task Type</span>
+                            <span>Quota After Refresh</span>
                         </div>
                         {systemLogs.map((e, i) => (
                             <div key={`sys-${i}`} className="log-row">
@@ -287,7 +287,7 @@ export function Stats() {
                                 </span>
                                 <span className={`log-reason ${reasonClass(e.reason)}`}>{e.reason}</span>
                                 <span className="log-duration" style={{ color: 'var(--success-color, #10b981)' }}>
-                                    {e.to_quota_5h !== null ? `${e.to_quota_5h}%` : '成功'}
+                                    {e.to_quota_5h !== null ? `${e.to_quota_5h}%` : 'Success'}
                                 </span>
                             </div>
                         ))}
@@ -304,10 +304,10 @@ function shortName(name: string): string {
 }
 
 function reasonClass(reason: string): string {
-    if (reason.includes('手动')) return 'manual';
-    if (reason.includes('429') || reason.includes('限额')) return 'ratelimit';
-    if (reason.includes('封号')) return 'banned';
-    if (reason.includes('保活')) return 'keepalive';
-    if (reason.includes('刷新')) return 'refresh';
+    if (reason.includes('Manual')) return 'manual';
+    if (reason.includes('429') || reason.includes('Quota')) return 'ratelimit';
+    if (reason.includes('Banned')) return 'banned';
+    if (reason.includes('Keepalive')) return 'keepalive';
+    if (reason.includes('Refresh')) return 'refresh';
     return 'auto';
 }

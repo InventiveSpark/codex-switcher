@@ -50,14 +50,14 @@ function App() {
     return (saved as PageType) || 'dashboard';
   });
 
-  // 持久化当前 tab
+  // Persist current tab
   useEffect(() => {
     localStorage.setItem('currentPage', currentPage);
   }, [currentPage]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [schedulerError, setSchedulerError] = useState<string | null>(null);
 
-  // 冲突确认弹窗状态
+  // Conflict confirmation modal state
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [conflictAccountName, setConflictAccountName] = useState('');
   const [pendingSwitchId, setPendingSwitchId] = useState<string | null>(null);
@@ -77,7 +77,7 @@ function App() {
       const status = await getSyncStatus();
       setSyncStatus(status);
     } catch (err) {
-      console.error('检查同步状态失败:', err);
+      console.error('Sync status check failed:', err);
     }
   };
 
@@ -100,10 +100,10 @@ function App() {
     return 'transient';
   };
 
-  // 监听后台调度器的账号更新事件
+  // Listen for background scheduler account update events
   useEffect(() => {
     const unlisten = listen('accounts-updated', () => {
-      console.log('[Frontend] 收到后台刷新通知，重新加载账号列表');
+      console.log('[Frontend] Received background refresh notification, reloading account list');
       refresh();
     });
 
@@ -112,16 +112,16 @@ function App() {
     };
   }, [refresh]);
 
-  // 监听后台刷新失败事件
+  // Listen for background refresh failure events
   useEffect(() => {
     const unlisten = listen<{ account_name: string; reason: string }>('token-refresh-failed', (event) => {
       const { account_name, reason } = event.payload;
       const timestamp = new Date().toLocaleTimeString();
       const kind = classifyRefreshFailure(reason);
       if (kind === 'permanent') {
-        setSchedulerError(`后台保活已停用（${account_name}，需重新登录）@ ${timestamp}`);
+        setSchedulerError(`Background keepalive disabled (${account_name}, re-login required) @ ${timestamp}`);
       } else {
-        setSchedulerError(`后台保活临时失败（${account_name}）：${reason} @ ${timestamp}`);
+        setSchedulerError(`Background keepalive temporarily failed (${account_name}): ${reason} @ ${timestamp}`);
       }
     });
 
@@ -130,18 +130,18 @@ function App() {
     };
   }, []);
 
-  // 监听代理切号/封号事件
+  // Listen for proxy switch/ban events
   const [proxyNotice, setProxyNotice] = useState<string | null>(null);
   useEffect(() => {
     const unsub1 = listen<string>('proxy-account-switched', (e) => {
-      const msg = `代理已自动切号 → ${e.payload}`;
+      const msg = `Proxy auto-switched → ${e.payload}`;
       setProxyNotice(msg);
       setTimeout(() => setProxyNotice(null), 8000);
       refresh();
       checkProxyStatus();
     });
     const unsub2 = listen<string>('proxy-account-banned', (e) => {
-      const msg = `检测到封号: ${e.payload}，已自动切换`;
+      const msg = `Ban detected: ${e.payload}, auto-switched`;
       setProxyNotice(msg);
       setTimeout(() => setProxyNotice(null), 10000);
       refresh();
@@ -157,10 +157,10 @@ function App() {
     };
   }, [refresh]);
 
-  // 监听设置更新事件
+  // Listen for settings update events
   useEffect(() => {
     const unlisten = listen('settings-updated', () => {
-      console.log('[Frontend] 收到设置更新通知，重新加载设置');
+      console.log('[Frontend] Received settings update notification, reloading settings');
       refresh();
       checkProxyStatus();
     });
@@ -170,7 +170,7 @@ function App() {
     };
   }, [refresh]);
 
-  // 执行真正的切换逻辑
+  // Execute actual switch logic
   const performSwitch = async (id: string) => {
     await switchTo(id);
     if (settings.auto_reload_ide) {
@@ -183,32 +183,32 @@ function App() {
     }, 500);
   };
 
-  // 切换账号（带冲突检测）
+  // Switch account (with conflict detection)
   const handleSwitch = async (id: string) => {
     if (isSwitching) return;
     try {
       setIsSwitching(true);
-      // 1. 检查是否有未同步的官方 Token 更新
+      // 1. Check for unsynced official Token updates
       const conflictName = await checkSyncConflict();
 
       if (conflictName) {
-        // 2. 如果有冲突，暂存目标 ID，弹出确认框
+        // 2. If conflict exists, store target ID and show confirmation dialog
         setConflictAccountName(conflictName);
         setPendingSwitchId(id);
         setShowConflictModal(true);
         return;
       }
 
-      // 3. 无冲突直接切换
+      // 3. No conflict, switch directly
       await performSwitch(id);
     } catch (err) {
-      console.error('切换检查失败:', err);
-      // 尝试保守切换
+      console.error('Switch check failed:', err);
+      // Attempt conservative switch
       try {
         await performSwitch(id);
       } catch (switchErr) {
-        // switchTo 内部已经 setError 了，但我们这里可以再打印一下
-        console.error('保守切换也失败了:', switchErr);
+        // switchTo has already setError internally, but we can log here too
+        console.error('Conservative switch also failed:', switchErr);
       }
     } finally {
       setIsSwitching(false);
@@ -216,7 +216,7 @@ function App() {
     }
   };
 
-  // 确认覆盖
+  // Confirm overwrite
   const handleConfirmSwitch = async () => {
     if (!pendingSwitchId || isSwitching) return;
     try {
@@ -225,8 +225,8 @@ function App() {
       setShowConflictModal(false);
       setPendingSwitchId(null);
     } catch (err) {
-      console.error('确认切换失败:', err);
-      // switchTo 内部已经 setError，这里关闭弹窗即可，让用户看到 Banner 错误
+      console.error('Confirm switch failed:', err);
+      // switchTo has already setError internally, just close the modal here so user sees Banner error
       setShowConflictModal(false);
     } finally {
       setIsSwitching(false);
@@ -234,7 +234,7 @@ function App() {
     }
   };
 
-  // 以 IDE 状态为准
+  // Sync with IDE state
   const handleFollowIdeAction = async () => {
     try {
       setIsSwitching(true);
@@ -243,13 +243,13 @@ function App() {
       setPendingSwitchId(null);
       await checkSyncStatus();
     } catch (err) {
-      console.error('同步 IDE 状态失败:', err);
+      console.error('Sync IDE state failed:', err);
     } finally {
       setIsSwitching(false);
     }
   };
 
-  // 取消切换
+  // Cancel switch
   const handleCancelSwitch = () => {
     setShowConflictModal(false);
     setPendingSwitchId(null);
@@ -268,10 +268,10 @@ function App() {
 
       if (path) {
         await writeTextFile(path, json);
-        alert('导出成功！');
+        alert('Export successful!');
       }
     } catch (err) {
-      alert('导出失败: ' + String(err));
+      alert('Export failed: ' + String(err));
     }
   };
 
@@ -281,7 +281,7 @@ function App() {
       <div className="app" data-palette={settings.theme_palette || 'github'}>
         <div className="loading">
           <div className="spinner" />
-          <p>加载中...</p>
+          <p>Loading...</p>
         </div>
       </div>
     );
@@ -289,44 +289,44 @@ function App() {
 
   return (
     <div className="app" data-palette={settings.theme_palette || 'github'}>
-      {/* 顶部标题栏 */}
+      {/* Top header */}
       <header className="app-header">
         <div className="header-left">
           <div className="app-logo">
             <Zap size={18} />
           </div>
           <h1>Codex Switcher <span className="app-version">v0.3.0</span></h1>
-          <div className={`proxy-indicator ${proxyRunning ? 'on' : 'off'}`} title={proxyRunning ? '代理运行中' : '代理未启动'}>
+          <div className={`proxy-indicator ${proxyRunning ? 'on' : 'off'}`} title={proxyRunning ? 'Proxy running' : 'Proxy stopped'}>
             <span className="proxy-dot" />
             {proxyRunning ? 'Proxy ON' : 'Proxy OFF'}
           </div>
         </div>
 
-        {/* 导航菜单 */}
+        {/* Navigation */}
         <nav className="header-nav">
           <button
             className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
             onClick={() => setCurrentPage('dashboard')}
           >
-            仪表盘
+            Dashboard
           </button>
           <button
             className={`nav-item ${currentPage === 'accounts' ? 'active' : ''}`}
             onClick={() => setCurrentPage('accounts')}
           >
-            账号管理
+            Accounts
           </button>
           <button
             className={`nav-item ${currentPage === 'proxy' ? 'active' : ''}`}
             onClick={() => setCurrentPage('proxy')}
           >
-            代理
+            Proxy
           </button>
           <button
             className={`nav-item ${currentPage === 'stats' ? 'active' : ''}`}
             onClick={() => setCurrentPage('stats')}
           >
-            统计
+            Usage
           </button>
           <button
             className={`nav-item ${currentPage === 'skills' ? 'active' : ''}`}
@@ -338,13 +338,13 @@ function App() {
             className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
             onClick={() => setCurrentPage('settings')}
           >
-            设置
+            Settings
           </button>
         </nav>
 
         <div className="header-actions">
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            + 添加账号
+            + Add Account
           </button>
         </div>
       </header>
@@ -381,15 +381,15 @@ function App() {
                 await syncActiveWithDisk();
                 checkSyncStatus();
               } catch (err) {
-                console.error('同步状态失败:', err);
+                console.error('Synch failed:', err);
               }
             }}
             onImportDiskAccount={async (name) => {
               try {
-                await importCurrent(name, '从 IDE 自动导入');
+                await importCurrent(name, 'Auto-imported from IDE');
                 checkSyncStatus();
               } catch (err) {
-                console.error('导入失败:', err);
+                console.error('Import failed:', err);
               }
             }}
           />
@@ -427,23 +427,23 @@ function App() {
 
       <ConfirmModal
         isOpen={showConflictModal}
-        title="⚠️ 登录状态冲突警告"
+        title="⚠️ Session Conflict Warning"
         message={
           <>
-            <p>检测到官方 Codex 插件中存在未同步的 Token 更新。</p>
-            <p>当前的账号状态与官方文件不一致：</p>
-            <span className="confirm-account-name">{conflictAccountName || '当前账号'}</span>
+            <p>Unsynced token update detected in official Codex plugin.</p>
+            <p>Current account state conflicts with official file:</p>
+            <span className="confirm-account-name">{conflictAccountName || 'Active Account'}</span>
             <p style={{ marginTop: '12px' }}>
-              直接切换将<b>覆盖</b>官方插件中的当前登录状态，且无法找回这些未同步的更新。
+              Switching will <b>overwrite</b> the current login state in the official plugin; unsynced updates will be lost.
             </p>
           </>
         }
-        confirmText="确认覆盖并切换"
-        cancelText="取消"
+        confirmText="Overwrite & Switch"
+        cancelText="Cancel"
         onConfirm={handleConfirmSwitch}
         onCancel={handleCancelSwitch}
         isLoading={isSwitching}
-        extraActionText="以 IDE 为准 (同步状态)"
+        extraActionText="Sync with IDE"
         onExtraAction={handleFollowIdeAction}
       />
     </div>

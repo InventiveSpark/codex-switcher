@@ -70,7 +70,7 @@ export function AccountList({
         });
     };
 
-    // 初始化数据
+    // Initialize data
     useEffect(() => {
         const initialUsage: Record<string, UsageData> = {};
         const initialInvalids = new Set<string>();
@@ -89,11 +89,11 @@ export function AccountList({
                     five_hour_left: acc.cached_quota.five_hour_left,
                     five_hour_reset: acc.cached_quota.five_hour_reset,
                     five_hour_reset_at: acc.cached_quota.five_hour_reset_at,
-                    five_hour_label: acc.cached_quota.five_hour_label || '5H 限额',
+                    five_hour_label: acc.cached_quota.five_hour_label || '5-Hour Quota',
                     weekly_left: acc.cached_quota.weekly_left,
                     weekly_reset: acc.cached_quota.weekly_reset,
                     weekly_reset_at: acc.cached_quota.weekly_reset_at,
-                    weekly_label: acc.cached_quota.weekly_label || '周限额',
+                    weekly_label: acc.cached_quota.weekly_label || 'Weekly Quota',
                     plan_type: acc.cached_quota.plan_type,
                     is_valid_for_cli: isValid,
                 };
@@ -105,7 +105,7 @@ export function AccountList({
         setBannedIds(initialBanned);
     }, [accounts]);
 
-    // 搜索与过滤逻辑
+    // Search and filter logic
     const filteredAccounts = useMemo(() => {
         let result = searchQuery
             ? accounts.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -134,20 +134,20 @@ export function AccountList({
         return counts;
     }, [accounts, usageMap]);
 
-    // 辅助工具函数
+    // Helper utility functions
     const formatDate = (val?: string | Date | null) => {
         if (!val) return '-';
         const d = typeof val === 'string' ? new Date(val) : val;
-        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     };
 
     const parseDuration = (str?: string) => {
-        if (!str || str === '未知' || str === 'N/A') return { text: 'N/A', hours: 999 };
-        if (str === '即将重置') return { text: '重置中', hours: 0 };
-        const matches = { d: str.match(/(\d+)天/), h: str.match(/(\d+)小时/), m: str.match(/(\d+)分钟/) };
+        if (!str || str === 'Unknown' || str === 'N/A') return { text: 'N/A', hours: 999 };
+        if (str === 'Resetting soon') return { text: 'Resetting', hours: 0 };
+        const matches = { d: str.match(/(\d+)d/), h: str.match(/(\d+)h/), m: str.match(/(\d+)m/) };
         const d = parseInt(matches.d?.[1] || '0'), h = parseInt(matches.h?.[1] || '0'), m = parseInt(matches.m?.[1] || '0');
         const totalH = d * 24 + h + m / 60;
-        const compact = d > 0 ? `${d}天 ${h}时` : h > 0 ? `${h}时 ${m}分` : `${m}分`;
+        const compact = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
         return { text: compact || 'N/A', hours: totalH };
     };
 
@@ -157,13 +157,13 @@ export function AccountList({
         const err = account.keepalive?.last_error;
         const isPermanent = err?.toLowerCase().match(/reused|invalidated|expired/);
 
-        if (isPermanent) return { text: '过期', warn: true };
-        if (isCurrent) return { text: '当前账号', warn: false };
-        if (!enabled) return { text: '已停用', warn: true };
-        return { text: err ? '重试中' : '已启用', warn: !!err };
+        if (isPermanent) return { text: 'Expired', warn: true };
+        if (isCurrent) return { text: 'Current Account', warn: false };
+        if (!enabled) return { text: 'Disabled', warn: true };
+        return { text: err ? 'Retrying' : 'Enabled', warn: !!err };
     };
 
-    // 交互处理
+    // Interaction handling
     const handleRefreshOne = async (id: string) => {
         setRefreshingIds(prev => new Set(prev).add(id));
         try {
@@ -221,7 +221,7 @@ export function AccountList({
             <div className="account-list-toolbar">
                 <div className="search-box">
                     <span className="search-icon">🔍</span>
-                    <input type="text" placeholder="搜索邮箱..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Search email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
                 <div className="filter-group">
                     {(['all', 'plus', 'team', 'free'] as const).map(t => (
@@ -248,17 +248,17 @@ export function AccountList({
                     }}
                 >
                     <Zap size={14} fill={autoReload ? "currentColor" : "none"} />
-                    <span style={{ fontSize: '12px' }}>自动重载</span>
+                    <span style={{ fontSize: '12px' }}>Auto Reload</span>
                 </button>
                 {onAddAccount && (
                     <button className="btn-icon-text" onClick={onAddAccount} style={{ marginRight: '8px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--primary-color)', color: 'white', border: 'none', fontSize: '12px' }}>
-                        + 添加
+                        + Add
                     </button>
                 )}
                 {onRefreshUsage && (
                     <button className="btn-icon-text" onClick={onRefreshUsage} disabled={usageLoading} style={{ marginRight: '8px', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--accent-color)', color: 'white', border: 'none', fontSize: '12px' }}>
                         <RefreshCw className={usageLoading ? 'spinning' : ''} size={12} />
-                        配额
+                        Quota
                     </button>
                 )}
                 <button className="btn-refresh" onClick={() => { setIsRefreshingAll(true); Promise.all(filteredAccounts.map(a => handleRefreshOne(a.id))).finally(() => setIsRefreshingAll(false)); }}>
@@ -272,10 +272,10 @@ export function AccountList({
                         <input type="checkbox" className="custom-checkbox" checked={filteredAccounts.length > 0 && filteredAccounts.every(a => selectedIds.has(a.id))} onChange={() => { const s = new Set(selectedIds); filteredAccounts.every(a => s.has(a.id)) ? filteredAccounts.forEach(a => s.delete(a.id)) : filteredAccounts.forEach(a => s.add(a.id)); setSelectedIds(s); }} />
                     </div>
                     <div className="col-drag"></div>
-                    <div className="col-email">账号信息</div>
-                    <div className="col-quota-merged">配额状态</div>
-                    <div className="col-time">同步/保活</div>
-                    <div className="col-actions">操作</div>
+                    <div className="col-email">Account Info</div>
+                    <div className="col-quota-merged">Quota Status</div>
+                    <div className="col-time">Sync/Keepalive</div>
+                    <div className="col-actions">Actions</div>
                 </div>
 
                 <div className="account-table-body">
@@ -296,12 +296,12 @@ export function AccountList({
                                     <input type="checkbox" className="custom-checkbox" checked={selectedIds.has(acc.id)} onChange={() => { const s = new Set(selectedIds); s.has(acc.id) ? s.delete(acc.id) : s.add(acc.id); setSelectedIds(s); }} />
                                 </div>
                                 <div className="col-drag"><span className="drag-handle">⋮⋮</span></div>
-                                <div className="col-email" onClick={() => handleCopy(acc.id, acc.name)} title="点击复制账号">
+                                <div className="col-email" onClick={() => handleCopy(acc.id, acc.name)} title="Click to copy account">
                                     <span className="email-text">{acc.name}</span>
                                     <div className="badges" style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
-                                        {copiedId === acc.id && <span className="badge copy-success">已复制</span>}
-                                        {isCurrent && <span className="badge current">当前</span>}
-                                        {isBanned ? <span className="badge banned" title="该账号已被 OpenAI 封禁">封号</span> : isLoggedOut ? <span className="badge logged-out" title="您已登出或登录了其他账号，请重新登录">已登出</span> : isInvalid && <span className="badge expired" title="该账号 Token 已过期或失效">过期</span>}
+                                        {copiedId === acc.id && <span className="badge copy-success">Copied</span>}
+                                        {isCurrent && <span className="badge current">Current</span>}
+                                        {isBanned ? <span className="badge banned" title="This account has been banned by OpenAI">Banned</span> : isLoggedOut ? <span className="badge logged-out" title="You have logged out or signed in to another account, please sign in again">Logged Out</span> : isInvalid && <span className="badge expired" title="This account token has expired or is invalid">Expired</span>}
                                         {usage?.plan_type && <span className="badge plan">{usage.plan_type.toUpperCase()}</span>}
                                     </div>
                                 </div>
@@ -311,29 +311,29 @@ export function AccountList({
                                             <QuotaItem label={usage.five_hour_label} percentage={usage.five_hour_left} reset={usage.five_hour_reset} resetAt={usage.five_hour_reset_at} />
                                             <QuotaItem label={usage.weekly_label} percentage={usage.weekly_left} reset={usage.weekly_reset} resetAt={usage.weekly_reset_at} />
                                         </div>
-                                    ) : <span className="quota-empty">未获取数据</span>}
+                                    ) : <span className="quota-empty">No data</span>}
                                 </div>
                                 <div className="col-time">
                                     <div className="time-item">
-                                        <span className="time-label">保活:</span>
+                                        <span className="time-label">Keepalive:</span>
                                         <span className={`time-val ${status.warn ? 'warn' : ''}`}>{status.text}</span>
                                     </div>
                                     <div className="time-item refresh">
-                                        <span className="time-label">刷新:</span>
+                                        <span className="time-label">Refresh:</span>
                                         <span className="time-val">{formatDate(acc.cached_quota?.updated_at)}</span>
                                     </div>
                                 </div>
                                 <div className="col-actions">
-                                    <button className="action-btn refresh" onClick={() => handleRefreshOne(acc.id)} disabled={isRefreshing} title="刷新"><RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} /></button>
+                                    <button className="action-btn refresh" onClick={() => handleRefreshOne(acc.id)} disabled={isRefreshing} title="Refresh"><RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} /></button>
                                     {!isCurrent && (
-                                        <button className={`action-btn keepalive ${acc.keepalive?.inactive_refresh_enabled !== false ? 'on' : 'off'}`} onClick={() => onSetInactiveRefreshEnabled(acc.id, acc.keepalive?.inactive_refresh_enabled === false)} title="保活">
+                                        <button className={`action-btn keepalive ${acc.keepalive?.inactive_refresh_enabled !== false ? 'on' : 'off'}`} onClick={() => onSetInactiveRefreshEnabled(acc.id, acc.keepalive?.inactive_refresh_enabled === false)} title="Keepalive">
                                             {acc.keepalive?.inactive_refresh_enabled !== false ? <ShieldCheck size={14} /> : <ShieldOff size={14} />}
                                         </button>
                                     )}
                                     {!isCurrent && (
-                                        <button className="action-btn switch" onClick={() => onSwitch(acc.id)} disabled={switchingIds.has(acc.id)} title="切换"><ArrowLeftRight size={14} /></button>
+                                        <button className="action-btn switch" onClick={() => onSwitch(acc.id)} disabled={switchingIds.has(acc.id)} title="Switch"><ArrowLeftRight size={14} /></button>
                                     )}
-                                    <button className="action-btn delete" onClick={() => setAccountToDelete({ id: acc.id, name: acc.name })} title="删除"><Trash2 size={14} /></button>
+                                    <button className="action-btn delete" onClick={() => setAccountToDelete({ id: acc.id, name: acc.name })} title="Delete"><Trash2 size={14} /></button>
                                 </div>
                             </div>
                         );
@@ -342,15 +342,15 @@ export function AccountList({
             </div>
 
             <div className="account-list-footer">
-                <span>共 {filteredAccounts.length} 个账号</span>
-                {selectedIds.size > 0 && <span className="selected-info">已选 {selectedIds.size} 个</span>}
+                <span>{filteredAccounts.length} accounts</span>
+                {selectedIds.size > 0 && <span className="selected-info">{selectedIds.size} selected</span>}
             </div>
 
             <ConfirmModal
                 isOpen={!!accountToDelete}
-                title="确认删除账号"
-                message={<p>确定要永久删除账号 <strong>{accountToDelete?.name}</strong> 吗？<br /><br />此操作不可恢复，删除后有关该账号的本地授权信息将被清除。</p>}
-                confirmText="彻底删除"
+                title="Confirm Delete Account"
+                message={<p>Are you sure you want to permanently delete account <strong>{accountToDelete?.name}</strong>?<br /><br />This action cannot be undone. Local authorization information for this account will be cleared after deletion.</p>}
+                confirmText="Delete Permanently"
                 onConfirm={() => {
                     if (accountToDelete) {
                         onDelete(accountToDelete.id);

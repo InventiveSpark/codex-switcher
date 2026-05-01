@@ -1,15 +1,15 @@
 use std::process::Command;
 
-/// IDE 配置：名称和对应的 Bundle ID
+/// IDE configuration: name and corresponding Bundle ID
 const IDE_CONFIGS: &[(&str, &str)] = &[
     ("Visual Studio Code", "com.microsoft.VSCode"),
     ("Cursor", "com.todesktop.230313mzl4w4u92"),
     ("Windsurf", "com.exafunction.windsurf"),
     ("Antigravity", "com.google.antigravity"),
-    ("Codex", "com.openai.codex"), // 暂定，用户确认后修正
+    ("Codex", "com.openai.codex"), // Tentative, to be corrected after user confirmation
 ];
 
-/// 检测运行中的 IDE
+/// Detect running IDEs
 pub fn detect_running_ides() -> Vec<String> {
     let mut running = Vec::new();
 
@@ -36,9 +36,9 @@ pub fn detect_running_ides() -> Vec<String> {
     running
 }
 
-/// 重载指定 IDE
+/// Reload specified IDE
 pub fn reload_ide(name: &str, use_window_reload: bool) -> Result<(), String> {
-    // 杀死所有 codex 进程（排除 Codex Switcher 自身）
+    // Kill all codex processes (excluding Codex Switcher itself)
     let script = r#"
         for pid in $(pgrep -f codex 2>/dev/null); do
             cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
@@ -52,21 +52,21 @@ pub fn reload_ide(name: &str, use_window_reload: bool) -> Result<(), String> {
 
     if let Ok(o) = output {
         if o.status.success() {
-            println!("已杀死所有 codex 进程");
+            println!("Killed all codex processes");
         }
     }
 
-    // 可选：还可以继续保留原来的 AppleScript 快捷键刷新机制以防万一，或者直接返回
-    // 这里保留后续逻辑，让 IDE 也能执行 Reload Window / Restart Extension Host 确保前端视图也刷新
-    // 如果用户只想要 pkill，我们可以直接返回 Ok(())。但根据语义 "切换帐号后 如果自动重载 IDE 直接 调用 pkill -9 -f codex"，
-    // 我们可以把它作为主要操作。这里保留原有的模拟按键操作，让它更彻底。
+    // Optional: keep original AppleScript shortcut refresh mechanism as fallback, or return directly
+    // Keep subsequent logic here to let IDE execute Reload Window / Restart Extension Host to ensure frontend view refreshes
+    // If user only wants pkill, we could return Ok(()) directly. But per semantics "after switching account, if auto-reload IDE, directly call pkill -9 -f codex",
+    // we use it as primary operation. Keep original keystroke simulation here for thoroughness.
 
-    // 优先尝试模拟按键指令
+    // Prefer attempting keystroke simulation command
     let bundle_id = IDE_CONFIGS
         .iter()
         .find(|&&(n, _)| n == name)
         .map(|&(_, b)| b)
-        .ok_or_else(|| format!("未找到 IDE {} 的配置", name))?;
+        .ok_or_else(|| format!("IDE configuration not found for {}", name))?;
 
     let command_text = if use_window_reload {
         "Reload Window"
@@ -74,7 +74,7 @@ pub fn reload_ide(name: &str, use_window_reload: bool) -> Result<(), String> {
         "Restart Extension Host"
     };
 
-    // AppleScript 脚本：使用 bundle id 激活并发送指令
+    // AppleScript: activate using bundle id and send command
     let script = format!(
         r#"
         tell application id "{}"
@@ -94,11 +94,11 @@ pub fn reload_ide(name: &str, use_window_reload: bool) -> Result<(), String> {
 
     match run_applescript(&script) {
         Ok(_) => Ok(()),
-        Err(e) if e.contains("1002") || e.contains("不由自主") || e.contains("不允许发送按键") =>
+        Err(e) if e.contains("1002") || e.contains("not allowed") || e.contains("keystroke not allowed") =>
         {
-            // 捕获权限错误，返回一个友好的提示，而不是直接报错
+            // Capture permission error, return friendly hint instead of direct error
             Err(
-                "PERMISSION_DENIED:需要“辅助功能”权限来重载窗口。请手动重载或在设置中授予权限。"
+                "PERMISSION_DENIED: Accessibility permission required to reload window. Reload manually or grant permission in Settings."
                     .to_string(),
             )
         }
@@ -106,7 +106,7 @@ pub fn reload_ide(name: &str, use_window_reload: bool) -> Result<(), String> {
     }
 }
 
-/// 移除 Codex App 的隔离属性 (修复闪退)
+/// Remove Codex App quarantine attribute (fixes crashes)
 pub fn remove_quarantine() -> Result<(), String> {
     let script = r#"
     do shell script "xattr -dr com.apple.quarantine /Applications/Codex.app" with administrator privileges
@@ -115,17 +115,17 @@ pub fn remove_quarantine() -> Result<(), String> {
     run_applescript(script).map(|_| ())
 }
 
-/// 执行 AppleScript
+/// Execute AppleScript
 fn run_applescript(script: &str) -> Result<String, String> {
     let output = Command::new("osascript")
         .arg("-e")
         .arg(script)
         .output()
-        .map_err(|e| format!("无法执行 osascript: {}", e))?;
+        .map_err(|e| format!("Failed to execute osascript: {}", e))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("AppleScript 执行失败: {}", err));
+        return Err(format!("AppleScript execution failed: {}", err));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())

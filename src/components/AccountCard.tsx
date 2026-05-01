@@ -41,9 +41,9 @@ export function AccountCard({ account, isCurrent, onSwitch, onDelete, onEdit }: 
     };
 
     const formatDate = (dateStr: string | null) => {
-        if (!dateStr) return '从未使用';
+        if (!dateStr) return 'Never used';
         const date = new Date(dateStr);
-        return date.toLocaleString('zh-CN', {
+        return date.toLocaleString('en-US', {
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
@@ -60,14 +60,14 @@ export function AccountCard({ account, isCurrent, onSwitch, onDelete, onEdit }: 
             <div className="account-info">
                 <div className="account-header">
                     <h3 className="account-name">{account.name}</h3>
-                    {isCurrent && <span className="current-badge">当前</span>}
+                    {isCurrent && <span className="current-badge">Active</span>}
                 </div>
                 <p className="account-meta">
-                    使用: {formatDate(account.last_used)}
+                    Used: {formatDate(account.last_used)}
                 </p>
                 {account.cached_quota?.updated_at && (
                     <p className="account-meta">
-                        刷新: {formatDate(account.cached_quota.updated_at)}
+                        Refreshed: {formatDate(account.cached_quota.updated_at)}
                     </p>
                 )}
                 {account.notes && (
@@ -82,14 +82,14 @@ export function AccountCard({ account, isCurrent, onSwitch, onDelete, onEdit }: 
                         onClick={handleSwitch}
                         disabled={switching}
                     >
-                        {switching ? '切换中...' : '切换'}
+                        {switching ? 'Switching...' : 'Switch'}
                     </button>
                 )}
                 <button
                     className="btn btn-ghost"
                     onClick={onEdit}
                 >
-                    编辑
+                    Edit
                 </button>
                 <button
                     className={`btn btn-danger ${confirmDelete ? 'confirm' : ''}`}
@@ -97,7 +97,7 @@ export function AccountCard({ account, isCurrent, onSwitch, onDelete, onEdit }: 
                     disabled={deleting}
                     onMouseLeave={() => setConfirmDelete(false)}
                 >
-                    {deleting ? '删除中...' : confirmDelete ? '确认删除?' : '删除'}
+                    {deleting ? 'Deleting...' : confirmDelete ? 'Confirm?' : 'Delete'}
                 </button>
             </div>
         </div>

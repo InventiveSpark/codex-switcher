@@ -25,10 +25,10 @@ export function useUsage() {
         setError(null);
 
         try {
-            // 先获取当前账号 ID
+            // First get current account ID
             const currentId = await invoke<string | null>('get_current_account_id');
             if (!currentId) {
-                setError('未设置当前账号');
+                setError('No current account set');
                 return;
             }
             const data = await invoke<UsageDisplay>('get_quota_by_id', { id: currentId });
@@ -40,7 +40,7 @@ export function useUsage() {
         }
     }, []);
 
-    // 初始加载
+    // Initial load
     useEffect(() => {
         fetchUsage();
     }, [fetchUsage]);

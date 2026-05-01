@@ -1,8 +1,8 @@
-//! 后台调度器 - 账号状态同步
+//! Background scheduler - Account state sync
 //!
-//! 策略：
-//! - 当前账号：仅按官方 auth.json 回流同步，不主动 refresh
-//! - 非活跃账号：由 Switcher 独占执行保活 refresh，并原子回写账号库
+//! Strategy:
+//! - Current account: only sync from official auth.json backflow, no proactive refresh
+//! - Inactive accounts: Switcher exclusively handles keepalive refresh, atomically writing back to account store
 
 use crate::account::AccountStore;
 use crate::oauth;
@@ -39,15 +39,15 @@ fn is_logged_out_error(reason: &str) -> bool {
     lower.contains("logged out") || lower.contains("signed in to another account")
 }
 
-/// 启动后台状态同步调度器
+/// Start background state sync scheduler
 pub fn start(
     store: Arc<Mutex<AccountStore>>,
     app_handle: tauri::AppHandle,
 ) -> tauri::async_runtime::JoinHandle<()> {
-    // 使用 Tauri 的 async runtime 而不是直接 tokio::spawn
-    // 因为在 setup() 中调用时 Tokio runtime 可能尚未完全初始化
+    // Use Tauri's async runtime instead of direct tokio::spawn
+    // Because Tokio runtime may not be fully initialized when called from setup()
     tauri::async_runtime::spawn(async move {
-        println!("✅ 后台调度器已启动");
+        println!("✅ Background scheduler started");
 
         loop {
             let (enabled, interval_minutes, inactive_refresh_days) = {
@@ -64,7 +64,7 @@ pub fn start(
                 continue;
             }
 
-            println!("[Scheduler] 开始后台同步检查...");
+            println!("[Scheduler] Starting background sync check...");
 
             let interval_minutes = if interval_minutes == 0 {
                 30
@@ -75,7 +75,7 @@ pub fn start(
             let mut store_changed = false;
             let mut has_failure_event = false;
 
-            // 1) 同步当前账号（权威源：~/.codex/auth.json）
+            // 1) Sync current account (authoritative source: ~/.codex/auth.json)
             if let Ok(official_auth) = AccountStore::read_codex_auth() {
                 let mut store = store.lock().unwrap();
                 if let Some(current_id) = store.current.clone() {
@@ -85,23 +85,23 @@ pub fn start(
                         if AccountStore::auth_identity_matches(&local_auth, &official_auth) {
                             if local_auth != official_auth {
                                 println!(
-                                    "[Scheduler] 当前账号 {} 检测到官方 auth.json 变动，按权威源同步。",
+                                    "[Scheduler] Current account {} detected official auth.json change, syncing from authoritative source.",
                                     current_id
                                 );
                                 if store.sync_account_from_auth_json(&current_id, official_auth) {
                                     let _ = store.save();
                                     store_changed = true;
-                                    println!("[Scheduler] ✅ 当前账号反向同步成功");
+                                    println!("[Scheduler] ✅ Current account reverse sync successful");
                                 }
                             } else {
                                 println!(
-                                    "[Scheduler] 当前账号 {} 与官方 auth.json 一致。",
+                                    "[Scheduler] Current account {} matches official auth.json.",
                                     current_id
                                 );
                             }
                         } else {
                             println!(
-                                "[Scheduler] 当前账号 {} 与官方 auth.json 身份不匹配，跳过同步。",
+                                "[Scheduler] Current account {} identity mismatch with official auth.json, skipping sync.",
                                 current_id
                             );
                         }
@@ -109,7 +109,7 @@ pub fn start(
                 }
             }
 
-            // 2) 收集应由 Switcher 独占保活的非活跃账号
+            // 2) Collect inactive accounts that should be exclusively kept alive by Switcher
             let targets: Vec<RefreshTarget> = {
                 let store = store.lock().unwrap();
                 let current = store.current.as_deref();
@@ -137,15 +137,15 @@ pub fn start(
                     .collect()
             };
 
-            // 3) 对非活跃账号执行独占保活刷新
+            // 3) Execute exclusive keepalive refresh for inactive accounts
             for target in targets {
-                println!("[Scheduler] 非活跃账号 {} 尝试保活刷新", target.name);
+                println!("[Scheduler] Inactive account {} attempting keepalive refresh", target.name);
 
                 match oauth::refresh_access_token(&target.refresh_token).await {
                     Ok(tokens) => {
                         let mut store = store.lock().unwrap();
                         if store.current.as_deref() == Some(target.id.as_str()) {
-                            // 账号已变为当前，交给官方路径维护
+                            // Account has become current, hand over to official path
                             continue;
                         }
                         if let Some(account) = store.accounts.get_mut(&target.id) {
@@ -163,9 +163,9 @@ pub fn start(
                         store.mark_keepalive_attempt_success(&target.id);
                         let _ = store.save();
                         store_changed = true;
-                        println!("[Scheduler] ✅ 非活跃账号 {} 保活刷新成功", target.name);
+                        println!("[Scheduler] ✅ Inactive account {} keepalive refresh successful", target.name);
 
-                        // 记录后台保活系统日志
+                        // Record background keepalive system log
                         use tauri::Manager;
                         if let Some(logger) =
                             app_handle.try_state::<Arc<crate::switch_log::SwitchLogger>>()
@@ -184,7 +184,7 @@ pub fn start(
                         let mut store = store.lock().unwrap();
                         store.mark_keepalive_attempt_failed(&target.id, reason.clone());
                         if is_reused_or_revoked_error(&reason) || is_logged_out_error(&reason) {
-                            // 风险保护：检测到 reused/revoked 后，自动停用该账号的非活跃保活，避免重复消耗。
+                            // Risk protection: after detecting reused/revoked, auto-disable inactive keepalive for this account to avoid repeated consumption.
                             let _ = store.set_inactive_refresh_enabled(&target.id, false);
                             if let Some(account) = store.accounts.get_mut(&target.id) {
                                 if is_logged_out_error(&reason) {
@@ -197,7 +197,7 @@ pub fn start(
                         let _ = store.save();
                         has_failure_event = true;
                         println!(
-                            "[Scheduler] ❌ 非活跃账号 {} 保活刷新失败: {}",
+                            "[Scheduler] ❌ Inactive account {} keepalive refresh failed: {}",
                             target.name, reason
                         );
 

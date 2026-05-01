@@ -58,7 +58,7 @@ export function Skills() {
     const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
     const [confirmInput, setConfirmInput] = useState('');
 
-    // 新仓库表单
+    // New repo form
     const [newOwner, setNewOwner] = useState('');
     const [newName, setNewName] = useState('');
     const [newBranch, setNewBranch] = useState('main');
@@ -73,7 +73,7 @@ export function Skills() {
             if (rescan) {
                 const count = await invoke<number>('scan_and_import_skills');
                 if (count > 0) {
-                    showMsg('success', `自动导入 ${count} 个新 skill`);
+                    showMsg('success', `Auto imported ${count} new skills`);
                 }
             }
             const list = await invoke<InstalledSkill[]>('get_installed_skills');
@@ -96,7 +96,7 @@ export function Skills() {
     };
 
     useEffect(() => {
-        loadInstalled(true); // 首次加载时扫描补录新 skill
+        loadInstalled(true); // Scan and import new skills on first load
         loadRepos();
         loadAppStatus();
     }, []);
@@ -106,9 +106,9 @@ export function Skills() {
         try {
             const list = await invoke<DiscoverableSkill[]>('discover_skills');
             setDiscovered(list);
-            showMsg('success', `发现 ${list.length} 个 skill`);
+            showMsg('success', `Discovered ${list.length} skills`);
         } catch (e) {
-            showMsg('error', `发现失败: ${e}`);
+            showMsg('error', `Discovery failed: ${e}`);
         } finally {
             setLoading(false);
         }
@@ -118,12 +118,12 @@ export function Skills() {
         setLoading(true);
         try {
             await invoke('install_skill', { skillJson: JSON.stringify(skill) });
-            showMsg('success', `已安装 ${skill.name}`);
+            showMsg('success', `Installed ${skill.name}`);
             await loadInstalled();
-            // 标记为已安装
+            // Mark as installed
             setDiscovered(prev => prev.map(s => s.key === skill.key ? { ...s, installed: true } : s));
         } catch (e) {
-            showMsg('error', `安装失败: ${e}`);
+            showMsg('error', `Install failed: ${e}`);
         } finally {
             setLoading(false);
         }
@@ -138,12 +138,12 @@ export function Skills() {
         if (!confirmDelete) return;
         try {
             await invoke('uninstall_skill', { skillId: confirmDelete.id });
-            showMsg('success', `已卸载 ${confirmDelete.name}`);
+            showMsg('success', `Uninstalled ${confirmDelete.name}`);
             setConfirmDelete(null);
             setConfirmInput('');
             await loadInstalled();
         } catch (e) {
-            showMsg('error', `卸载失败: ${e}`);
+            showMsg('error', `Uninstall failed: ${e}`);
         }
     };
 
@@ -153,17 +153,17 @@ export function Skills() {
             const content = await invoke<string>('get_skill_content', { directory: skill.directory });
             setDetailContent(content);
         } catch {
-            setDetailContent('无法读取 SKILL.md');
+            setDetailContent('Cannot read SKILL.md');
         }
     };
 
     const handleToggleAppLink = async (app: string, enabled: boolean) => {
         try {
             await invoke('toggle_skill_app_link', { app, enabled });
-            showMsg('success', enabled ? `${app} 已链接到 Skills` : `${app} 已断开链接`);
+            showMsg('success', enabled ? `${app} linked to Skills` : `${app} unlinked from Skills`);
             await loadAppStatus();
         } catch (e) {
-            showMsg('error', `操作失败: ${e}`);
+            showMsg('error', `Operation failed: ${e}`);
         }
     };
 
@@ -171,7 +171,7 @@ export function Skills() {
         if (!newOwner || !newName) return;
         try {
             await invoke('add_skill_repo', { owner: newOwner, name: newName, branch: newBranch });
-            showMsg('success', `已添加 ${newOwner}/${newName}`);
+            showMsg('success', `Added ${newOwner}/${newName}`);
             setNewOwner('');
             setNewName('');
             setNewBranch('main');
@@ -193,9 +193,9 @@ export function Skills() {
     const handleSyncAll = async () => {
         try {
             await invoke('sync_all_skills');
-            showMsg('success', '同步完成');
+            showMsg('success', 'Sync complete');
         } catch (e) {
-            showMsg('error', `同步失败: ${e}`);
+            showMsg('error', `Sync failed: ${e}`);
         }
     };
 
@@ -215,13 +215,13 @@ export function Skills() {
                 <h2>Skills</h2>
                 <div className="skills-tabs">
                     <button className={`tab-btn ${tab === 'installed' ? 'active' : ''}`} onClick={() => { setTab('installed'); loadInstalled(true); }}>
-                        已安装 ({installed.length})
+                        Installed ({installed.length})
                     </button>
                     <button className={`tab-btn ${tab === 'discover' ? 'active' : ''}`} onClick={() => { setTab('discover'); if (discovered.length === 0) handleDiscover(); }}>
-                        发现
+                        Discover
                     </button>
                     <button className={`tab-btn ${tab === 'repos' ? 'active' : ''}`} onClick={() => setTab('repos')}>
-                        仓库
+                        Repos
                     </button>
                 </div>
             </div>
@@ -233,25 +233,25 @@ export function Skills() {
             <div className="skills-search">
                 <input
                     type="text"
-                    placeholder="搜索 skill..."
+                    placeholder="Search skills..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="search-input"
                 />
                 {tab === 'installed' && (
-                    <button className="btn btn-sm btn-ghost" onClick={handleSyncAll}>全量同步</button>
+                    <button className="btn btn-sm btn-ghost" onClick={handleSyncAll}>Sync All</button>
                 )}
                 {tab === 'discover' && (
                     <button className="btn btn-sm btn-primary" onClick={handleDiscover} disabled={loading}>
-                        {loading ? '扫描中...' : '刷新'}
+                        {loading ? 'Scanning...' : 'Refresh'}
                     </button>
                 )}
             </div>
 
-            {/* 已安装列表 */}
+            {/* Installed List */}
             {tab === 'installed' && (
                 <>
-                    {/* CLI 同步状态 */}
+                    {/* CLI Sync Status */}
                     <div className="app-sync-bar">
                         {APPS.map(app => (
                             <label key={app} className={`app-sync-item ${appStatus[app] ? 'linked' : ''}`}>
@@ -261,32 +261,32 @@ export function Skills() {
                                     onChange={e => handleToggleAppLink(app, e.target.checked)}
                                 />
                                 <span>{app}</span>
-                                <span className="link-status">{appStatus[app] ? '已链接' : '未链接'}</span>
+                                <span className="link-status">{appStatus[app] ? 'Linked' : 'Unlinked'}</span>
                             </label>
                         ))}
                     </div>
 
                     <div className="skills-list">
                         {filtered.length === 0 ? (
-                            <div className="skills-empty">暂无已安装的 skill</div>
+                            <div className="skills-empty">No installed skills</div>
                         ) : filtered.map(skill => (
                             <div key={skill.id} className="skill-card" onClick={() => handleOpenDetail(skill)} style={{ cursor: 'pointer' }}>
                                 <div className="skill-info">
                                     <div className="skill-name">{skill.name}</div>
-                                    <div className="skill-desc">{skill.description || '无描述'}</div>
+                                    <div className="skill-desc">{skill.description || 'No description'}</div>
                                     <div className="skill-meta">
                                         {skill.source === 'github' && skill.repo_owner && (
                                             <span className="skill-source">{skill.repo_owner}/{skill.repo_name}</span>
                                         )}
-                                        {skill.source === 'local' && <span className="skill-source">本地</span>}
+                                        {skill.source === 'local' && <span className="skill-source">Local</span>}
                                     </div>
                                 </div>
                                 <button
                                     className="btn btn-sm btn-danger"
                                     onClick={(e) => { e.stopPropagation(); handleUninstall(skill.id, skill.name); }}
-                                    title="卸载"
+                                    title="Uninstall"
                                 >
-                                    删除
+                                    Delete
                                 </button>
                             </div>
                         ))}
@@ -294,31 +294,31 @@ export function Skills() {
                 </>
             )}
 
-            {/* 发现列表 */}
+            {/* Discover List */}
             {tab === 'discover' && (
                 <div className="skills-list">
-                    {loading && <div className="skills-empty">正在扫描 GitHub 仓库...</div>}
+                    {loading && <div className="skills-empty">Scanning GitHub repositories...</div>}
                     {!loading && filteredDiscover.length === 0 && (
-                        <div className="skills-empty">点击"刷新"从仓库发现 skill</div>
+                        <div className="skills-empty">Click "Refresh" to discover skills from repositories</div>
                     )}
                     {filteredDiscover.map(skill => (
                         <div key={skill.key} className="skill-card">
                             <div className="skill-info">
                                 <div className="skill-name">{skill.name}</div>
-                                <div className="skill-desc">{skill.description || '无描述'}</div>
+                                <div className="skill-desc">{skill.description || 'No description'}</div>
                                 <div className="skill-meta">
                                     <span className="skill-source">{skill.repo_owner}/{skill.repo_name}</span>
                                 </div>
                             </div>
                             {skill.installed ? (
-                                <span className="skill-installed-badge">已安装</span>
+                                <span className="skill-installed-badge">Installed</span>
                             ) : (
                                 <button
                                     className="btn btn-sm btn-primary"
                                     onClick={() => handleInstall(skill)}
                                     disabled={loading}
                                 >
-                                    安装
+                                    Install
                                 </button>
                             )}
                         </div>
@@ -326,7 +326,7 @@ export function Skills() {
                 </div>
             )}
 
-            {/* 仓库管理 */}
+            {/* Repo Management */}
             {tab === 'repos' && (
                 <div className="repos-section">
                     <div className="repo-list">
@@ -340,7 +340,7 @@ export function Skills() {
                                     className="btn btn-sm btn-danger"
                                     onClick={() => handleRemoveRepo(repo.owner, repo.name)}
                                 >
-                                    移除
+                                    Remove
                                 </button>
                             </div>
                         ))}
@@ -350,22 +350,22 @@ export function Skills() {
                         <span>/</span>
                         <input placeholder="repo" value={newName} onChange={e => setNewName(e.target.value)} className="repo-input" />
                         <input placeholder="branch" value={newBranch} onChange={e => setNewBranch(e.target.value)} className="repo-input small" />
-                        <button className="btn btn-sm btn-primary" onClick={handleAddRepo}>添加</button>
+                        <button className="btn btn-sm btn-primary" onClick={handleAddRepo}>Add</button>
                     </div>
                 </div>
             )}
-            {/* 删除确认弹窗 */}
+            {/* Delete Confirm Modal */}
             {confirmDelete && (
                 <div className="skill-detail-overlay" onClick={() => setConfirmDelete(null)}>
                     <div className="skill-detail-modal confirm-delete-modal" onClick={e => e.stopPropagation()}>
                         <div className="detail-header">
-                            <h2>确认卸载</h2>
+                            <h2>Confirm Uninstall</h2>
                             <button className="detail-close" onClick={() => setConfirmDelete(null)}>✕</button>
                         </div>
                         <div className="detail-content">
-                            <p>即将卸载 <strong>{confirmDelete.name}</strong>，此操作将从所有 CLI 目录移除该 skill。</p>
+                            <p>About to uninstall <strong>{confirmDelete.name}</strong>, this will remove the skill from all CLI directories.</p>
                             <p style={{ marginTop: '12px', color: 'var(--text-secondary)' }}>
-                                请输入 skill 名称 <code>{confirmDelete.name}</code> 以确认：
+                                Please enter skill name <code>{confirmDelete.name}</code> to confirm:
                             </p>
                             <input
                                 type="text"
@@ -383,20 +383,20 @@ export function Skills() {
                             />
                         </div>
                         <div className="detail-footer">
-                            <button className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>取消</button>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>Cancel</button>
                             <button
                                 className="btn btn-sm btn-danger"
                                 disabled={confirmInput !== confirmDelete.name}
                                 onClick={executeUninstall}
                             >
-                                确认卸载
+                                Confirm Uninstall
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Skill 详情弹窗 */}
+            {/* Skill Detail Modal */}
             {detailSkill && (
                 <div className="skill-detail-overlay" onClick={() => setDetailSkill(null)}>
                     <div className="skill-detail-modal" onClick={e => e.stopPropagation()}>
@@ -415,7 +415,7 @@ export function Skills() {
                                 className="btn btn-sm btn-danger"
                                 onClick={() => { handleUninstall(detailSkill.id, detailSkill.name); setDetailSkill(null); }}
                             >
-                                卸载
+                                Uninstall
                             </button>
                         </div>
                     </div>

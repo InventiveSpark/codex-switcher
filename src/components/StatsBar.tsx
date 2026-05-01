@@ -43,7 +43,7 @@ export function StatsBar({ accountCount, usage }: StatsBarProps) {
                 <div className="stat-icon blue">👤</div>
                 <div className="stat-info">
                     <div className="stat-value">{accountCount}</div>
-                    <div className="stat-label">账号总数</div>
+                    <div className="stat-label">Total Accounts</div>
                 </div>
             </div>
 
@@ -51,10 +51,10 @@ export function StatsBar({ accountCount, usage }: StatsBarProps) {
                 <div className="stat-icon green">⏱</div>
                 <div className="stat-info">
                     <div className="stat-value">{usage?.five_hour_left ?? '-'}%</div>
-                    <div className="stat-label">5h 配额</div>
+                    <div className="stat-label">5h Quota</div>
                     {usage && (
                         <div className={`stat-hint ${usage.five_hour_left > 50 ? 'good' : 'warn'}`}>
-                            {usage.five_hour_left > 50 ? '配额充足' : '配额偏低'}
+                            {usage.five_hour_left > 50 ? 'Quota OK' : 'Low Quota'}
                         </div>
                     )}
                 </div>
@@ -64,10 +64,10 @@ export function StatsBar({ accountCount, usage }: StatsBarProps) {
                 <div className="stat-icon purple">📅</div>
                 <div className="stat-info">
                     <div className="stat-value">{usage?.weekly_left ?? '-'}%</div>
-                    <div className="stat-label">周配额</div>
+                    <div className="stat-label">Weekly Quota</div>
                     {usage && (
                         <div className={`stat-hint ${usage.weekly_left > 50 ? 'good' : 'warn'}`}>
-                            {usage.weekly_left > 50 ? '配额充足' : '配额偏低'}
+                            {usage.weekly_left > 50 ? 'Quota OK' : 'Low Quota'}
                         </div>
                     )}
                 </div>
@@ -78,7 +78,7 @@ export function StatsBar({ accountCount, usage }: StatsBarProps) {
                     <div className="stat-icon gold">💰</div>
                     <div className="stat-info">
                         <div className="stat-value">${usage.credits_balance?.toFixed(2) ?? '0.00'}</div>
-                        <div className="stat-label">额度余额</div>
+                        <div className="stat-label">Credits Balance</div>
                     </div>
                 </div>
             )}
@@ -90,11 +90,11 @@ export function StatsBar({ accountCount, usage }: StatsBarProps) {
                     </div>
                     <div className="stat-info">
                         <div className="stat-value">:{proxyStatus.port}</div>
-                        <div className="stat-label">代理</div>
+                        <div className="stat-label">Proxy</div>
                         <div className={`stat-hint ${proxyStatus.is_running ? 'good' : 'warn'}`}>
                             {proxyStatus.is_running
-                                ? proxyStatus.allow_lan ? '局域网可用' : '仅本机'
-                                : '已停止'}
+                                ? proxyStatus.allow_lan ? 'LAN Available' : 'Local Only'
+                                : 'Stopped'}
                         </div>
                     </div>
                 </div>

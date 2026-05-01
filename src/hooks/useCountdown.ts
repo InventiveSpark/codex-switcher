@@ -18,7 +18,7 @@ export function useCountdown(resetAt?: number) {
             const diff = resetAt - now;
 
             if (diff <= 0) {
-                setTimeLeft('即将重置');
+                setTimeLeft('Resetting soon');
                 return;
             }
 
@@ -28,13 +28,13 @@ export function useCountdown(resetAt?: number) {
             const seconds = diff % 60;
 
             if (days > 0) {
-                setTimeLeft(`${days}天 ${hours}小时 ${minutes}分钟 后重置`);
+                setTimeLeft(`Resets in ${days}d ${hours}h ${minutes}m`);
             } else if (hours > 0) {
-                setTimeLeft(`${hours}小时 ${minutes}分钟 ${seconds}秒 后重置`);
+                setTimeLeft(`Resets in ${hours}h ${minutes}m ${seconds}s`);
             } else if (minutes > 0) {
-                setTimeLeft(`${minutes}分钟 ${seconds}秒 后重置`);
+                setTimeLeft(`Resets in ${minutes}m ${seconds}s`);
             } else {
-                setTimeLeft(`${seconds}秒 后重置`);
+                setTimeLeft(`Resets in ${seconds}s`);
             }
         };
 
@@ -72,13 +72,13 @@ export function useShortCountdown(resetAt?: number) {
             const minutes = Math.floor((diff % 3600) / 60);
 
             if (days > 0) {
-                setTimeLeft(`${days}天 ${hours}时 ${minutes}分`);
+                setTimeLeft(`${days}d ${hours}h ${minutes}m`);
             } else if (hours > 0) {
-                setTimeLeft(`${hours}时 ${minutes}分`);
+                setTimeLeft(`${hours}h ${minutes}m`);
             } else if (minutes > 0) {
-                setTimeLeft(`${minutes}分`);
+                setTimeLeft(`${minutes}m`);
             } else {
-                setTimeLeft(`${diff}秒`);
+                setTimeLeft(`${diff}s`);
             }
         };
 

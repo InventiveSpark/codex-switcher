@@ -39,10 +39,10 @@ export function Dashboard({
     onSyncWithDisk,
     onImportDiskAccount,
 }: DashboardProps) {
-    // 获取最佳账号推荐（配额最高的账号）
+    // Get best account recommendation (highest quota)
     const getBestAccount = () => {
         if (accounts.length === 0) return null;
-        // 简单返回第一个非当前账号
+        // Simply return the first non-current account
         return accounts.find(a => a.id !== currentAccount?.id) || null;
     };
 
@@ -50,48 +50,48 @@ export function Dashboard({
 
     return (
         <div className="dashboard">
-            {/* 问候语 */}
+            {/* Greeting */}
             <div className="dashboard-greeting">
                 <h2>
-                    你好, {currentAccount?.name.split('@')[0] || '用户'} 👋
+                    Hello, {currentAccount?.name.split('@')[0] || 'User'} 👋
                 </h2>
             </div>
 
-            {/* 统计卡片 */}
+            {/* Stats Cards */}
             <StatsBar accountCount={accounts.length} usage={usage} />
 
-            {/* 同步状态警告 */}
+            {/* Sync Status Warning */}
             {syncStatus && !syncStatus.is_synced && (
                 <div className="sync-warning-banner">
                     <div className="banner-content">
                         <span className="banner-icon">⚠️</span>
                         <div className="banner-text">
-                            <strong>登录状态不一致：</strong>
-                            检测到 IDE 正在使用 <span>{syncStatus.disk_email || '未知账号'}</span>
+                            <strong>Session Mismatch:</strong>
+                            Detected IDE using <span>{syncStatus.disk_email || 'Unknown Account'}</span>
                         </div>
                     </div>
                     <div className="banner-actions">
                         {syncStatus.matching_id ? (
                             <button className="btn btn-sm btn-accent" onClick={onSyncWithDisk}>
-                                修正激活状态
+                                Fix Active State
                             </button>
                         ) : (
-                            <button className="btn btn-sm btn-primary" onClick={() => onImportDiskAccount(syncStatus.disk_email || '新账号')}>
-                                立即导入该账号
+                            <button className="btn btn-sm btn-primary" onClick={() => onImportDiskAccount(syncStatus.disk_email || 'New Account')}>
+                                Import This Account
                             </button>
                         )}
                     </div>
                 </div>
             )}
 
-            {/* 双栏布局 */}
+            {/* Two-column Layout */}
             <div className="dashboard-grid">
-                {/* 当前账号 */}
+                {/* Current Account */}
                 <div className={`dashboard-card current-account ${isCurrentInvalid ? 'invalid' : ''}`}>
                     <div className="card-header">
                         <span className="card-icon">✓</span>
-                        <h3>当前账号</h3>
-                        {isCurrentInvalid && <span className="invalid-badge" title="授权已失效，请删除后重新登录">⚠️ 失效</span>}
+                        <h3>Current Account</h3>
+                        {isCurrentInvalid && <span className="invalid-badge" title="Auth expired, please delete and re-login">⚠️ Invalid</span>}
                     </div>
                     {currentAccount ? (
                         <div className="current-account-content">
@@ -114,33 +114,33 @@ export function Dashboard({
                                 className="btn btn-outline btn-full"
                                 onClick={onNavigateToAccounts}
                             >
-                                切换账号
+                                Switch Account
                             </button>
                         </div>
                     ) : (
                         <div className="no-account">
-                            <p>暂无账号</p>
+                            <p>No Account</p>
                         </div>
                     )}
                 </div>
 
-                {/* 最佳账号推荐 */}
+                {/* Best Account Recommendation */}
                 <div className="dashboard-card best-accounts">
                     <div className="card-header">
                         <span className="card-icon">↗</span>
-                        <h3>最佳账号推荐</h3>
+                        <h3>Best Account Recommendation</h3>
                     </div>
                     <div className="best-accounts-list">
                         {bestAccount ? (
                             <div className="best-account-item">
                                 <div className="account-label">
-                                    <span className="label-text">推荐账号</span>
+                                    <span className="label-text">Recommended Account</span>
                                     <span className="account-email">{bestAccount.name}</span>
                                 </div>
                                 <span className="quota-badge">100%</span>
                             </div>
                         ) : (
-                            <p className="no-recommendation">暂无推荐</p>
+                            <p className="no-recommendation">No Recommendations</p>
                         )}
                     </div>
                     {accounts.length > 1 && (
@@ -148,20 +148,20 @@ export function Dashboard({
                             className="btn btn-accent btn-full"
                             onClick={() => bestAccount && onSwitch(bestAccount.id)}
                         >
-                            一键切换最佳
+                            Switch to Best
                         </button>
                     )}
                 </div>
             </div>
 
-            {/* 快速链接 */}
+            {/* Quick Links */}
             <div className="dashboard-links">
                 <button className="link-card" onClick={onNavigateToAccounts}>
-                    <span>查看所有账号</span>
+                    <span>View All Accounts</span>
                     <span className="link-arrow">→</span>
                 </button>
                 <button className="link-card" onClick={onExport}>
-                    <span>导出账号数据</span>
+                    <span>Export Account Data</span>
                     <span className="link-icon">↓</span>
                 </button>
             </div>
