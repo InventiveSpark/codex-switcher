@@ -141,9 +141,9 @@ MIT License — подробности в файле [LICENSE](LICENSE).
 
 ## Screenshots / 截图 / Скриншоты
 
-![Dashboard](assets/images/1.png)
+![Dashboard](assets/images/en1.png)
 ![Account Management](assets/images/2.png)
-![Settings](assets/images/3.png)
+![Settings](assets/images/en2.png)
 
 ## Contributing / 贡献 / Вклад в проект
 
